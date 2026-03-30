@@ -6,9 +6,9 @@
 		<title>reveal.js - Markdown Example</title>
 
 		<link rel="stylesheet" href="../dist/reveal.css" />
-		<link rel="stylesheet" href="../dist/theme/black.css" id="theme" />
+		<link rel="stylesheet" href="../dist/theme/solarized.css" id="theme" />
 
-		<link rel="stylesheet" href="../dist/plugin/highlight/monokai.css" />
+		<!-- <link rel="stylesheet" href="../dist/plugin/highlight/monokai.css" /> -->
 
 		<script name="ui">
 			CTX = {}
@@ -722,34 +722,83 @@
 				<section data-markdown>
 					<script type="text/template">
 						## Policy Gradient Methods
-						### Monte-carlo direct policy search
-						---
-						## Reinforcement Learning
-					
-						* General
-						* Unsupervised
-						* Learn through interaction with an _Environment_
-						---
-						## Environment
-
-						* Is a tuple $(S, A, P, R, \gamma)$
-						* $S$ is a finite set of states
-						* $A$ is a finite set of actions
-						* $P$ is a state transition probability matrix
-						* $P_{ss'}^a=\mathop{\mathbb{P}}[S_{t+1}=s'|S_t=s,A_t=a]$
-						* $R$ is a reward function, $R_{s}^a = \mathop{\mathbb{E}}[R_{t+1}|S_t=s,A_t=a]$
-						* $\gamma$ is a discount factor [0, 1]
+						### REINFORCE
 					</script>
 				</section>
+
+				<section>
+					<section data-markdown>
+						<script type="text/template">
+						## Introduction
+						### What is Reinforcement-Learning?
+					
+						* Machine learning technique
+						* Unsupervised
+						* Agent learns through interaction with an _ENVIRONMENT_
+						</script>
+					</section>
+                </section>
+
+				<section>
+					<section data-markdown>
+						<script type="text/template">
+						## Environment
+						* Has...
+							* A state
+							* Transition dynamics
+							* A reward function
+						---
+						## Environment
+						* Sample a trajectory...
+							1. Choose an action $a_t$ given the current state $s_t$
+							2. Environment responds with $r_{t+1}$ and $s_{t+1}$
+							3. Repeat
+
+						_The agent's goal is to maximize cumulative reward_
+						---
+						## Environment
+						* Formally is a Markov Descision Process (MDP)
+						* Is a tuple $(S, A, P, R, \gamma)$
+							* $S$ is a finite set of states
+							* $A$ is a finite set of actions
+							* $P$ is a state transition probability matrix
+							* $P_{s_{t}s_{t+1}}^a=\mathop{\mathbb{P}}[s_{t+1}|s_t,a_t]$
+							* $R$ is a reward function, $R_{s}^a = \mathop{\mathbb{E}}[r_{t+1}|s_t,a_t]$
+							* $\gamma$ is a discount factor [0, 1]
+						</script>
+					</section>
+
+					<section>
+							_TODO: visualization of state transitions occuring_
+					</section>
+                </section>
 
                 <section>
 					<section data-markdown>
 						<script type="text/template">
-							## Environment
+							## What are Policy Gradient Methods?
 							
-							* Transitions from state $s_t$ to $s_{t+1}$ given chosen action $a_t$
-							* Reward $r_t$ is returned for $(s_t, a_t)$ a
-							* Concrete $s_{t+1}$ given $a_t$ depends on MDP's dynamics
+							* Elegant solution to the RL problem
+							* No knowledge of environment dynamics
+							* No estimation of a value function
+							* Seeks to directly optimize the agent's _POLICY_
+						</script>
+					</section>
+                </section>
+
+                <section>
+					<section data-markdown>
+						<script type="text/template">
+							## Policy
+							$\pi_\theta(a|s)$
+							* The core of an RL agent
+							* Function which maps state $s$ to action $a$
+							* Mapping of $s$ to $a$ is defined by parameters $\theta$
+							* Can be defined for discrete or continous action spaces
+							---
+							## Policy
+							$\pi_\theta(a|s)$
+							* In practice 
 						</script>
 					</section>
                 </section>
@@ -872,11 +921,11 @@
 				controls: true,
 				progress: true,
 				history: true,
-				center: true,
+				center: false,
 
-				markdown: {
-					smartypants: true,
-				},
+				// markdown: {
+				// 	smartypants: true,
+				// },
 
 				plugins: [RevealMarkdown, RevealHighlight, RevealNotes, RevealMath.KaTeX],
 			});
