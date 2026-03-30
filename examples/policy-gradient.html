@@ -723,6 +723,8 @@
 					<script type="text/template">
 						## Policy Gradient Methods
 						### REINFORCE
+
+						_TODO: hook animation of puck env
 					</script>
 				</section>
 
@@ -798,8 +800,63 @@
 							---
 							## Policy
 							$\pi_\theta(a|s)$
-							* In practice 
+							* In our case...
+								* The action space is discrete
+								* The policy is a probability distribution
+									* For all action classes
+									* Stochastic
+							---
+							## Policy
+							$$\pi_\theta(a|s) = \frac{e^{z}}{\sum_{i}e^{z_{i}}}$$
+							$$z = \theta\phi(s)$$
+							* $\phi$ is a function that extracts features from $s$
+							* We can choose a specific action as...
+
+							$$a_t \sim \pi_{\theta}(s)$$
 						</script>
+					</section>
+					<section>
+						<ul>
+							<li>_TODO: visualization of policy probability distribution for different states_</li>
+							<li>_TODO: visualization of box of action classes_</li>
+							<li>_TODO: visualization of sampling occuring_</li>
+						</ul>
+					</section>
+                </section>
+
+                <section>
+					<section data-markdown>
+						<script type="text/template">
+							## Policy Gradient Methods
+
+							$$J(\theta) = \mathop{\mathbb{E}}_{\tau \sim \pi}[R(\tau)]$$
+							* Our objective is to maximize $J(\theta)$
+							* We will do so by fiddling with $\theta$
+
+							Lets see how we get there..
+							---
+							## Policy Gradient Methods
+
+							First, we reframe the expectation as an integral. By the definition of the expectation.
+							$$
+							\mathop{\mathbb{E}}_{x \sim p(x)}[f(x)]=\int f(x)p(x) dx
+							$$
+
+							We rewrite as...
+							
+							$$
+							\mathop{\mathbb{E}}_{\tau \sim \pi}[R(\tau)] =
+							$$
+
+							$$
+							\int R(\tau) p_{\theta}(\tau) d\tau
+							$$
+						</script>
+					</section>
+					<section>
+						<ul>
+							<li>_TODO: visualization of _</li>
+						</ul>
 					</section>
                 </section>
 
