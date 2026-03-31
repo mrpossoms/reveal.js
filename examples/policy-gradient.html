@@ -825,34 +825,54 @@
                 </section>
 
                 <section>
-					<section data-markdown>
-						<script type="text/template">
-							## Policy Gradient Methods
+					<section>
 
-							$$J(\theta) = \mathop{\mathbb{E}}_{\tau \sim \pi}[R(\tau)]$$
-							* Our objective is to maximize $J(\theta)$
-							* We will do so by fiddling with $\theta$
-
-							Lets see how we get there..
-							---
-							## Policy Gradient Methods
-
-							First, we reframe the expectation as an integral. By the definition of the expectation.
-							$$
-							\mathop{\mathbb{E}}_{x \sim p(x)}[f(x)]=\int f(x)p(x) dx
-							$$
-
-							We rewrite as...
-							
-							$$
-							\mathop{\mathbb{E}}_{\tau \sim \pi}[R(\tau)] =
-							$$
-
-							$$
-							\int R(\tau) p_{\theta}(\tau) d\tau
-							$$
-						</script>
+						<h2>Policy Gradient Methods</h2>
+						$$J(\theta) = \mathop{\mathbb{E}}_{\tau \sim \pi_{\theta}}[R(\tau)]$$
+						<ul>
+							<li>Our objective is to maximize $J(\theta)$</li>
+							<li>We will do so by fiddling with $\theta$</li>
+						</ul>
+						<p>
+						Lets see how we get there..
+						</p>
 					</section>
+                	<section>
+	                	<h2>Policy Gradient Methods</h2>
+						First, we reframe the expectation as an integral. By the definition of the expectation.
+						$$
+						\mathop{\mathbb{E}}_{x \sim p(x)}[f(x)]=\int f(x)p(x) dx
+						$$
+						We rewrite as...
+						
+						$$
+						\mathop{ \mathbb{E}}_{ \tau \sim \pi}[R(\tau)] = \int R(\tau) p_{ \theta }(\tau) d\tau
+						$$
+                	</section>
+
+                	<section>
+	                	<h2>Policy Gradient Methods</h2>
+	                	Next, we take the gradient w.r.t. $\theta$
+	                	$$
+	                	\nabla_{\theta}J(\theta) = \nabla_{\theta} \int R(\tau) p_{ \theta }(\tau) d\tau
+	                	$$
+	                	Recognizing that $R(\tau)$ has no dependence on $\theta$...
+	                	$$
+	                	\nabla_{\theta}J(\theta) = \int R(\tau) \nabla_{\theta} p_{ \theta }(\tau) d\tau
+	                	$$
+	                	This is great, but no longer an expectation...
+                	</section>
+
+                	<section>
+	                	<h2>Policy Gradient Methods</h2>
+	                	However, there's the likelihood-ratio identity...
+	                	$$
+	                	p_{\theta}(\tau)\nabla_{\theta}log(p_{\theta}(\tau)) = \nabla_{\theta}p_{\theta}(\tau)
+	                	$$
+	                	But where on earth does this come from?
+                	</section>
+
+
 					<section>
 						<ul>
 							<li>_TODO: visualization of _</li>
