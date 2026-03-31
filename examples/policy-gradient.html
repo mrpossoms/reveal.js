@@ -864,14 +864,103 @@
                 	</section>
 
                 	<section>
-	                	<h2>Policy Gradient Methods</h2>
-	                	However, there's the likelihood-ratio identity...
-	                	$$
-	                	p_{\theta}(\tau)\nabla_{\theta}log(p_{\theta}(\tau)) = \nabla_{\theta}p_{\theta}(\tau)
-	                	$$
-	                	But where on earth does this come from?
+                		<h2>Policy Gradient Methods</h2>
+                		<p>
+                		A quick aside... 
+                		Consider a function
+                		</p>
+                		$$
+                		f(x)
+                		$$
+                		<p>Take the log of that function</p>
+                		$$
+                		log(f(x))
+                		$$
+                		<p>and differentiate it</p>
+                		$$
+                		\frac{d}{dx} log(f(x)) = \frac{f'(x)}{f(x)}
+                		$$
+                		<p>Take note of this structure</p>
                 	</section>
 
+                	<section>
+	                	<h2>Policy Gradient Methods</h2>
+	                	Right now we have...
+	                	$$
+	                	\nabla_{\theta} p_{ \theta }(\tau)
+	                	$$
+	                	However, we can be clever and add the following...
+	                	$$
+	                	\textcolor{red}{p_{\theta}(\tau)}\frac{\nabla_{\theta}p_{ \theta }(\tau)}{\textcolor{red}{p_{\theta}(\tau)}}
+	                	$$
+	                	$p_{\theta}(\tau)$ and $\frac{1}{p_{\theta}(\tau)}$ cancel out, so it changes nothing about our gradient.
+                	</section>
+
+                	<section>
+	                	<h2>Policy Gradient Methods</h2>
+	                	However you might have noticed that this
+	                	$$
+	                	p_{\theta}(\tau)\textcolor{red}{\frac{\nabla_{\theta}p_{ \theta }(\tau)}{\textcolor{red}{p_{\theta}(\tau)}}}
+	                	$$
+	                	Looks an awful lot like this
+                		$$
+                		\frac{d}{dx} log(f(x)) = \textcolor{red}{\frac{f'(x)}{f(x)}}
+                		$$
+                	</section>
+                	
+                	<section>
+	                	<h2>Policy Gradient Methods</h2>
+	                	Which leads us to what's called the <i>likelihood-ratio trick</i>
+                		$$
+                		\nabla_{\theta} p_{ \theta }(\tau)=p_{\theta}(\tau)\frac{\nabla_{\theta}p_{ \theta }(\tau)}{p_{\theta}(\tau)}=p_{\theta}(\tau)\nabla_{\theta}log(p_{ \theta }(\tau))
+                		$$
+                		This allows us to transform this term in our integral
+	                	$$
+	                	\nabla_{\theta}J(\theta) = \int R(\tau) \textcolor{red}{\nabla_{\theta} p_{ \theta }(\tau)} d\tau
+	                	$$
+                		Into
+	                	$$
+	                	\nabla_{\theta}J(\theta) = \int R(\tau) \textcolor{red}{p_{\theta}(\tau)\nabla_{\theta}log(p_{ \theta }(\tau))} d\tau
+	                	$$
+                	</section>
+
+                	<section>
+	                	<h2>Policy Gradient Methods</h2>
+	                	Now we can take our integral
+	                	$$
+	                	\nabla_{\theta}J(\theta) = \int \textcolor{orange}{R(\tau)} \textcolor{red}{p_{\theta}(\tau)}\textcolor{orange}{\nabla_{\theta}log(p_{ \theta }(\tau))} d\tau
+	                	$$
+	                	And rearrange it into something recognizable as an expectation
+	                	$$
+	                	\nabla_{\theta}J(\theta) = \int \textcolor{orange}{R(\tau)\nabla_{\theta}log(p_{ \theta }(\tau))} \textcolor{red}{p_{\theta}(\tau)}d\tau
+	                	$$
+                	</section>
+
+                	<section>
+	                	<h2>Policy Gradient Methods</h2>
+	                	However we still have $p_{\theta}(\tau)$ in our expectation. Which includes both our policy and the environment.
+	                	$$
+	                	p_{\theta}(\tau)=\prod_{t}\pi_{\theta}(a_{t}|s_{t})P(s_{t+1}|s_{t},a_{t}) 
+	                	$$
+	                	If we take the log of both sides
+	                	$$
+	                	log(p_{\theta}(\tau))=\sum_{t}log(\pi_{\theta}(a_{t}|s_{t}))+\sum_{t}log(P(s_{t+1}|s_{t},a_{t})) 
+	                	$$
+
+                	</section>
+
+                	<section>
+	                	<h2>Policy Gradient Methods</h2>
+	                	Now we can take our integral
+	                	$$
+	                	\nabla_{\theta}J(\theta) = \int \textcolor{orange}{R(\tau)} \textcolor{red}{p_{\theta}(\tau)}\textcolor{orange}{\nabla_{\theta}log(p_{ \theta }(\tau))} d\tau
+	                	$$
+	                	And rearrange it into something recognizable as an expectation
+	                	$$
+	                	\nabla_{\theta}J(\theta) = \int \textcolor{orange}{R(\tau)\nabla_{\theta}log(p_{ \theta }(\tau))} \textcolor{red}{p_{\theta}(\tau)}d\tau
+	                	$$
+	                	Which is something we will be able to work with.
+                	</section>
 
 					<section>
 						<ul>
@@ -999,10 +1088,10 @@
 				progress: true,
 				history: true,
 				center: false,
-
-				// markdown: {
-				// 	smartypants: true,
-				// },
+				maxScale: 1,
+				markdown: {
+					smartypants: true,
+				},
 
 				plugins: [RevealMarkdown, RevealHighlight, RevealNotes, RevealMath.KaTeX],
 			});
