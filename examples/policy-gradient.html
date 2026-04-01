@@ -1,1100 +1,1060 @@
 <!DOCTYPE html>
 <html lang="en">
-	<head>
-		<meta charset="utf-8" />
-
-		<title>reveal.js - Markdown Example</title>
-
-		<link rel="stylesheet" href="../dist/reveal.css" />
-		<link rel="stylesheet" href="../dist/theme/solarized.css" id="theme" />
-
-		<!-- <link rel="stylesheet" href="../dist/plugin/highlight/monokai.css" /> -->
-
-		<script name="ui">
-			CTX = {}
-
-			function when_visible(id, cb)
-			{
-				let visible_cb = (entries, observer) => {
-					entries.forEach((entry) => {
-						window.when_visible_element_callbacks[entry.target.id](entry.isIntersecting);
-					});
-				};
-
-				if (!window.when_visible_observer) {
-					window.when_visible_observer = new IntersectionObserver(visible_cb, {
-						root: null,
-						rootMargin: '0px',
-						threshold: 0.9,
-					});
-					window.when_visible_element_callbacks = {};
-				}
-
-				let ele = document.getElementById(id);
-				window.when_visible_element_callbacks[id] = cb;
-				window.when_visible_observer.observe(ele);
-			}
-
-			function animate(id, duration) {
-				if (!window.animation_intervals) {
-					window.animation_intervals = {};
-				}
-
-				return {
-					using: function(animation) {
-						return {
-							when: function(condition) {
-								if (condition) {
-									window.animation_intervals[id] = setInterval(animation, duration);
-									console.log('setInverval: ' + duration + ' for ' + id);
-								} else if (window.animation_intervals[id]) {
-									clearInterval(window.animation_intervals[id]);
-									delete window.animation_intervals[id];
-									console.log('clearInterval for ' + id);
-								}
-							}
-						};
-					}
-				};
-			}
-
-			function animate_when_visible(params, animation_cb) {
-				when_visible(params.id, (visible) => {
-					animate(params.id, 1000 / params.fps).using(animation_cb)
-					                                     .when(visible);
-				});
-			}
-
-			function setTheme(theme) {
-				window.myPreferedTheme = theme;
-			}
-
-			function detectSystemTheme() {
-				if (window.myPreferedTheme) return window.myPreferedTheme;
-				if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
-					return 'dark';
-				} else {
-					return 'light';
-				}
-			}
-
-			function color(name) 
-			{
-				return {
-					'dark': {
-						'LightGray': 'LightGray',
-						'black': 'white'
-					},
-					'light': {
-						'LightGray': 'DarkGray',
-						'black': 'black'
-					}
-				}[detectSystemTheme()][name];
-			}
-
-			function ctx_cache(e)
-			{
-				if (typeof e == 'string') {
-					e = document.getElementById(e);
-				}
-
-				let just_added = false;
-				if (e.id in CTX == false) {
-					CTX[e.id] = e.getContext('2d');
-					just_added = true;
-				} 
-
-				if (just_added || e.offsetWidth != CTX[e.id].width || e.offsetHeight != CTX[e.id].height) {
-					const dpr = window.devicePixelRatio || 1;
-					const rect = e.getBoundingClientRect();
-					e.width = rect.width * dpr;
-					e.height = rect.height * dpr;
-					CTX[e.id].scale(dpr, dpr);
-					//e.style.width = `${rect.width}px`;
-					//e.style.height = `${rect.height}px`;
-					// These are just to check for size changes and have no other impact
-					CTX[e.id].width = e.offsetWidth;
-					CTX[e.id].height = e.offsetHeight;
-					CTX[e.id].wants_redraw = true;
-					console.log("updated canvas size");
-				} else {
-					CTX[e.id].wants_redraw = false;
-				}
-
-				return CTX[e.id];
-			}
-
-			function clear(cvsId)
-			{
-				const e = document.getElementById(cvsId);
-				const ctx = ctx_cache(e);
-				ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
-			}
-
-			function text(ctx_cvs_or_id, message, point, params)
-			{
-				let ctx = ctx_cvs_or_id;
-				if (typeof ctx_cvs_or_id == 'string') {
-					ctx = ctx_cache(document.getElementById(ctx_cvs_or_id));
-				}
-				else if (ctx_cvs_or_id instanceof HTMLCanvasElement) {
-					ctx = ctx_cache(ctx_cvs_or_id);
-				}
-
-				params = params || {};
-				ctx.textAlign = params.textAlign || 'center';
-				ctx.textBaseline = params.textBaseline || 'bottom';
-				ctx.font = params.font || '16px JetBrains Mono';
-				ctx.fillStyle = params.fillStyle || color('black');
-
-				if ('angle' in params) {
-					ctx.save();
-					ctx.translate(point[0], point[1]);
-					ctx.rotate(params.angle);
-					point = [0, 0];
-				}
-
-			    ctx.fillText(message, point[0], point[1]);
-
-				if ('angle' in params) {
-					ctx.restore();
-				}
-			}
-
-			function line(ctx, x0, y0, x1, y1)
-			{
-				ctx.beginPath(); 
-				ctx.moveTo(x0, y0); 
-				ctx.lineTo(x1, y1); 
-				ctx.stroke();
-			}
-
-			function slider_param(event)
-			{
-				if (!event) { event = { currentTarget: { value: 0 }}; }
-				return parseFloat(event.currentTarget.value);
-			}
-
-			let px = (ctx, x) => {
-				const dpr = window.devicePixelRatio || 1;
-				let w = ctx.canvas.width / dpr;
-				let h = ctx.canvas.height / dpr;
-				let pixels_per_unit = h / 2;
-				return x * pixels_per_unit + w / 2;
-			};
-
-			let py = (ctx, y) => {
-				const dpr = window.devicePixelRatio || 1;
-				let w = ctx.canvas.width / dpr;
-				let h = ctx.canvas.height / dpr;
-				let pixels_per_unit = h / 2;
-				return -y * pixels_per_unit + h / 2;
-			};
-
-			function plot(cvsId, fn, params)
-			{
-				const e = document.getElementById(cvsId);
-				const dpr = window.devicePixelRatio || 1;
-				const ctx = ctx_cache(e);
-				let w = ctx.canvas.width / dpr;
-				let h = ctx.canvas.height / dpr;
-				let pixels_per_unit = h / 2;
-
-				if (params) {
-					ctx.strokeStyle = 'strokeStyle' in params ? params.strokeStyle : color('black');
-					ctx.lineWidth = 'lineWidth' in params ? params.lineWidth : 2;
-					if ('lineDash' in params) { ctx.setLineDash(params.lineDash); }
-					else { ctx.setLineDash([]); }
-				}
-				else {
-					ctx.strokeStyle = color('black');
-					ctx.lineWidth = 2;
-					ctx.setLineDash([]);
-				}
-
-				let trace = new Path2D();
-				for (let x = -(w/2) / pixels_per_unit; x < w / pixels_per_unit; x += 0.01)
-				{
-					let y = fn(x, params);
-					if (x == -(w/2) / pixels_per_unit) { trace.moveTo(px(ctx, x), py(ctx, y)); }
-					else { trace.lineTo(px(ctx, x), py(ctx, y)); }
-				}
-
-				if (params && 'label' in params) {
-					let y = fn(params.label.x, params);
-				
-					let padding = params.label.padding ? params.label.padding : -10;
-					let textMetrics = ctx.measureText(params.label.text);
-					let top = py(ctx, y) + padding - textMetrics.actualBoundingBoxAscent;
-					let bottom = py(ctx, y) + padding + textMetrics.actualBoundingBoxDescent;
-					console.log(top);
-					if (top < 0 || bottom > h) {
-						ctx.textBaseline = y > 0 ? 'top' : 'bottom';
-						padding = -padding;
-					}
-
-					text(ctx, params.label.text, [px(ctx, params.label.x), py(ctx, y) + padding]);
-				}
-
-				ctx.stroke(trace);
-			}
-		</script>
-		<script name="math">
-			function fin_diff(f, x, h)
-			{
-				return (f(x + h) - f(x - h)) / (2 * h);
-			}
-
-			let rows = (A) => { return A.length; }
-			let cols = (A) => { return A[0].length; }
-			let rnd = () => { return Math.random() * 2 - 1; };
-
-			let zeros = (r, c) => { 
-				let z = Array(r);
-
-				for (let i = 0; i < r; i++) {
-					z[i] = Array(c).fill(0);
-				}
-
-				return z;
-			};
-
-			function matmul(A, B)
-			{
-				if (cols(A) != rows(B)) { throw "Matrix dimensions do not match"; }
-
-				let C = [];
-				for (let r = 0; r < rows(A); r++)
-				{
-					C.push([]);
-					for (let c = 0; c < cols(B); c++)
-					{
-						let sum = 0;
-						for (let k = 0; k < cols(A); k++)
-						{
-							sum += A[r][k] * B[k][c];
-						}
-						C[r].push(sum);
-					}
-				}
-				return C;
-			}
-
-			function matadd(A, B)
-			{
-				if (rows(A) != rows(B) || cols(A) != B[0].length) { throw "Matrix dimensions do not match"; }
-
-				let C = [];
-				for (let i = 0; i < rows(A); i++)
-				{
-					C.push([]);
-					for (let j = 0; j < cols(A); j++)
-					{
-						C[i].push(A[i][j] + B[i][j]);
-					}
-				}
-				return C;
-			}
-
-			function matscl(A, s)
-			{
-				let B = [];
-				for (let i = 0; i < rows(A); i++)
-				{
-					B.push([]);
-					for (let j = 0; j < cols(A); j++)
-					{
-						B[i].push(A[i][j] * s);
-					}
-				}
-				return B;
-			}
-
-			function vecsub(a, b)
-			{
-				if (a.length != b.length) { throw "Vector dimensions do not match"; }
-				let c = [];
-				for (let i = 0; i < a.length; i++)
-				{
-					c.push(a[i] - b[i]);
-				}
-				return c;
-			}
-
-			function vecscl(a, s)
-			{
-				let b = [];
-				for (let i = 0; i < a.length; i++)
-				{
-					b.push(a[i] * s);
-				}
-				return b;
-			}
-
-			function randmat(rows, cols)
-			{
-				let A = [];
-				for (let i = 0; i < rows; i++)
-				{
-					A.push([]);
-					for (let j = 0; j < cols; j++)
-					{
-						A[i].push(Math.random() - 0.5);
-					}
-				}
-				return A;
-			}
-
-			function softmax(z)
-			{
-				let sum = z.reduce((acc, val) => acc + Math.exp(val), 0);
-				return z.map(val => Math.exp(val) / sum);
-			}
-
-			function softermax(z)
-			{
-				let y = softmax(z);
-				let max_idx = y.argmax();
-				if (y[max_idx] > 0.9) {
-					let rem = y[max_idx] - 0.9;
-					y[max_idx] = 0.9;
-					let b = 0;
-					for (let i = 0; i < y.length; i++) { if (i != max_idx) { b += y[i]; } }
-					for (let i = 0; i < y.length; i++) {
-						if (i == max_idx) continue;
-						y[i] += (y[i]/b) * rem;
-					}
-				}
-
-				return y;
-			}
-
-			function leaky_relu(z)
-			{
-				return z.map(row => row.map(val => val > 0 ? val : 0.01 * val));
-			}
-
-			function dist(p0, p1)
-			{
-				return Math.sqrt(Math.pow(p0[0] - p1[0], 2) + Math.pow(p0[1] - p1[1], 2));
-			}
-
-			function sample_multinomial(p)
-			{
-				let r = Math.random();
-				let sum = 0;
-				for (let i = 0; i < p.length; i++)
-				{
-					sum += p[i];
-					if (r < sum) { return i; }
-				}
-			}
-		</script>
-		<script name="pg">
-			function policy_grad(pi_pr, theta, x, a, h)
-			{
-				// TODO: make this operate on theta which is a tensor instead of a matrix
-				let G = zeros(rows(theta), cols(theta));
-
-				for (let r = 0; r < rows(theta); r++) {
-					for (let c = 0; c < cols(theta); c++) {
-						let theta_plus = theta.map((row, i) => row.map((val, j) => {
-							return i == r && j == c ? val + h : val;
-						}));
-
-						let theta_minus = theta.map((row, i) => row.map((val, j) => {
-							return i == r && j == c ? val - h : val;
-						}));
-
-						let pi_plus = pi_pr(theta_plus, x, a);
-						let pi_minus = pi_pr(theta_minus, x, a);
-
-						let grad = (pi_plus - pi_minus)  / (2 * h);
-						
-						if (isNaN(grad)) {
-							throw "NaN gradient element value"; 
-						}
-						G[r][c] = grad;
-					}
-				}
-
-				return G;
-			}
-
-			function optimize(pi, theta, T, params)
-			{
-				params = params || {};	
-				params.alpha = params.alpha == undefined ? 0.1 : params.alpha;
-				params.gamma = params.gamma || 0.99;
-
-				if (!(T instanceof Array)) { T = [T]; }
-
-				let G = zeros(rows(theta), cols(theta));//theta.map(theta_i => zeros(theta_i.rows(), theta_i.cols()));
-
-				let pi_pr = params.pi_pr || ((theta, x, a) => { return pi(theta, x).pr[a]; });
-
-				for (let ti = 0; ti < T.length; ti++) {
-					const p = 1 / T[ti].X.length;
-
-					for (let t = 0; t < T[ti].X.length; t++) {
-						let G_t = matscl(policy_grad(pi_pr, theta, T[ti].X[t], T[ti].A[t], 0.001), p);
-						G = matadd(G, matscl(G_t, T[ti].R[t]/* * Math.pow(params.gamma, t)*/));
-					}
-
-					G = matscl(G, 1 / T.length);
-				}
-
-				return matadd(theta, matscl(G, params.alpha));
-			}
-
-
-			function draw_probabilities(cvsId, p, names, left_top, right_bottom, annotator)
-			{
-				const e = document.getElementById(cvsId);
-				const dpr = window.devicePixelRatio || 1;
-				const ctx = ctx_cache(e);
-
-				left_top = left_top || [0, 0];
-				right_bottom = right_bottom || [ctx.canvas.width / dpr, ctx.canvas.height / dpr];
-				annotator = annotator || function(ctx, i, x, y) {};
-
-				let w = right_bottom[0] - left_top[0];
-				let h = right_bottom[1] - left_top[1];
-
-				let path = new Path2D();
-				path.moveTo(left_top[0], right_bottom[1]);
-				p = [].concat([0], p)
-				for (let i = 0; i < p.length; i++)
-				{
-					let x = left_top[0] + w * i / p.length;
-					let y = right_bottom[1] - h * p[i];
-					path.lineTo(x, y);
-				}
-				path.lineTo(right_bottom[0], right_bottom[1]);
-				ctx.stroke(path);
-
-				for (let i = 0; i < p.length; i++)
-				{
-					let x = (left_top[0] + w * i / p.length);
-					let y = right_bottom[1] - h * p[i];
-					annotator(ctx, i, x, y);
-					if (i > 0 && i < p.length) {
-						let text_metrics = ctx.measureText(names[i-1]);
-						let th = text_metrics.height / 2;
-						let tw = text_metrics.width;
-						ctx.fillStyle = 'red';
-						ctx.fillRect(x - (10 + tw / 2), y - (10 + th / 2), text_metrics.width + (20 + tw), text_metrics.height + (20 + th));
-						let y_offset = y > 30 ? -10 : 20;
-						text(ctx, names[i-1], [x, y + y_offset]);
-					}
-				}
-			}
-
-			function draw_reward_plot(cvsId, R, left_top, right_bottom)
-			{
-				const e = document.getElementById(cvsId);
-				const ctx = ctx_cache(e);
-				const dpr = window.devicePixelRatio || 1;
-
-				left_top = left_top || [0, 0];
-				right_bottom = right_bottom || [ctx.canvas.width / dpr, ctx.canvas.height / dpr];
-
-				let w = right_bottom[0] - left_top[0];
-				let h = right_bottom[1] - left_top[1];
-
-				let min = Math.min(Math.min(...R),-1);
-				let max = Math.max(Math.max(...R),1);
-				let range = max - min;
-
-				let py = (y) => (y - min) / range;
-				let y = (p) => (right_bottom[1] * (1 - p)) + left_top[1] * p;
-				ctx.beginPath();
-				ctx.moveTo(left_top[0], y(py(0)));
-				ctx.lineTo(right_bottom[0], y(py(0)));
-				ctx.setLineDash([5, 15]);
-				ctx.strokeStyle = color('LightGray');
-				ctx.stroke();
-				ctx.setLineDash([]);
-
-				let path = new Path2D();
-				for (let i = 0; i < R.length; i++)
-				{
-					let x = left_top[0] + w * i / R.length;
-					let p = py(R[i]);
-					if (i == 0) {
-						path.moveTo(x, y(p));
-					} else {
-						path.lineTo(x, y(p));		
-					}
-
-					if (i == R.length - 1) {
-						let str = parseInt(R[i]).toString();
-						let text_metrics = ctx.measureText(str);
-						let th = text_metrics.height / 2;
-						let tw = text_metrics.width;
-						ctx.font = '16px JetBrains Mono';
-						ctx.fillStyle = color('black');
-						let x_off = x + tw > w ? -tw : 0;
-						ctx.fillText(str, x + x_off, y(p) + 16);
-					}
-				}
-				ctx.strokeStyle = color('black');
-				ctx.stroke(path);
-			}
-
-			let basic = {
-				target: 1,
-				pi: function(theta, x) {
-					let z = matmul([x], theta);
-					let p = softmax(z[0]);
-					let a_idx = sample_multinomial(p);
-
-					return { pr: p, idx: a_idx };
-				},
-				sample_trajectory: function(theta, for_visualization) {
-					let x_t = [1];
-					let T = { X: [], A_pr: [], A: [], R: []};
-
-					for (let t = 0; t < 1; t++) {
-						let a_t = basic.pi(theta, x_t);
-						let r_t = basic.step(T, x_t, a_t, 0.99);
-					}
-
-					return T;
-				},
-				step: function(T, x_t, a_t, gamma)
-				{
-					let r_t = a_t.idx == basic.target ? 1 : -1;
-
-					T.X.push(x_t);
-					T.R.push(r_t);
-					T.A_pr.push(a_t.pr);
-					T.A.push(a_t.idx);
-				},
-			};
-
-			let puck = {
-				w: 100,
-				h: 100,
-				pi: function(theta, x) {
-					// 1x2 * 2x6 -> 1x6
-					let dx = x[2] - x[0];
-					let dy = x[3] - x[1];
-					let mag = Math.sqrt(dx * dx + dy * dy) + 0.1;
-					let _x = [dx/mag, dy/mag];
-
-					let z = matmul([_x], theta)[0];
-					let z_x = z.slice(0, 3);
-					let z_y = z.slice(3, 6);
-					let pr_x = softmax(z_x);
-					let pr_y = softmax(z_y);
-					let a_x_idx = sample_multinomial(pr_x);
-					let a_y_idx = sample_multinomial(pr_y);
-
-					return { pr: [pr_x, pr_y], idx: [a_x_idx, a_y_idx] };
-				},
-				dist_to_target: function(x) {
-					return dist([x[0],x[1]], [x[2], x[3]]);
-				},
-				initial_state: function(left_top, right_bottom, randomize_target) {
-					left_top = left_top || [0, 0];
-					right_bottom = right_bottom || [500, 500];
-					let r = Math.random;
-					let w = right_bottom[0] - left_top[0];
-					let h = right_bottom[1] - left_top[1];
-					let o_x = left_top[0], o_y = left_top[1];
-					// in the background, trajectories could be sampled this way so there isn't an axial bias built into
-					// the optimized policy. But for visualization purposes, the puck and targets could be spawned anywhere
-					let targ_x = randomize_target ? r() * w : w / 2;
-					let targ_y = randomize_target ? r() * h : h / 2; 
-					let x_0 = [o_x + r() * w, o_y + r() * h, o_x + targ_x, o_y + targ_y];
-
-					for(var i = 0; i < 10 && puck.dist_to_target(x_0) <= 10; i++) {
-						x_0 = [o_x + r() * w, o_y + r() * h, o_x + targ_x, o_y + targ_y];
-					}
-
-					return x_0;
-				},
-				sample_trajectory: function(theta, left_top, right_bottom, randomize_target) {
-					let x_t = puck.initial_state(left_top, right_bottom, randomize_target);
-
-					let T = { X: [], A_pr: [], A: [], R: []};
-
-					for (let t = 0; t < 5 * 60; t++) {
-						let a_t = puck.pi(theta, x_t);
-						let r_t = puck.step(T, x_t, a_t, 0.99);
-						if (r_t == null) {
-							break;
-						}
-						x_t = T.X[t];
-
-					}
-
-					return T;
-				},
-				reward: function(x_t, x_t1)
-				{
-					let d0 = puck.dist_to_target(x_t);
-					let d1 = puck.dist_to_target(x_t1);
-					return d0 - d1;
-				},
-				step: function(T, x_t, a_t, gamma)
-				{
-					let x_t1 = zeros(4, 1);
-
-					x_t1[0] = x_t[0] + (a_t.idx[0] - 1) * 2;
-					x_t1[1] = x_t[1] + (a_t.idx[1] - 1) * 2;
-					x_t1[2] = x_t[2];
-					x_t1[3] = x_t[3];
-
-					let d1 = puck.dist_to_target(x_t1);
-
-					let r_t = puck.reward(x_t, x_t1);
-					if (d1 < 5) { return null; }
-
-					T.X.push(x_t1);
-					T.R.push(r_t);
-					T.A_pr.push(a_t.pr);
-					T.A.push(a_t.idx);
-					return r_t;
-				},
-				draw: function(cvsId, time, trajectory, left_top, right_bottom)
-				{
-					const e = document.getElementById(cvsId);
-					const ctx = ctx_cache(e);
-					const dpr = window.devicePixelRatio || 1;
-
-					let state = trajectory.X[time];
-
-					if (!left_top) { left_top = [0, 0]; }
-					if (!right_bottom) { right_bottom = [ctx.canvas.width/dpr, ctx.canvas.height/dpr]; }
-
-					puck.w = right_bottom[0] - left_top[0];
-					puck.h = right_bottom[1] - left_top[1];
-
-					if (state == undefined) {
-						debugger;
-					}
-
-					// draw target
-					ctx.beginPath();
-					ctx.strokeStyle = color('black');
-					ctx.moveTo(state[2] - 5, state[3] - 5);
-					ctx.lineTo(state[2] + 5, state[3] + 5);
-					ctx.moveTo(state[2] - 5, state[3] + 5);
-					ctx.lineTo(state[2] + 5, state[3] - 5);
-					ctx.stroke();
-
-					// draw path
-					ctx.beginPath();
-					ctx.setLineDash([5, 15]);
-					ctx.strokeStyle = color('LightGray');
-					let x = trajectory.X[0];
-					ctx.moveTo(x[0], x[1]);
-					for (let t = 1; t < time; t++) {
-						x = trajectory.X[t];
-						ctx.lineTo(x[0], x[1]);
-					}
-					ctx.setLineDash([]);
-					ctx.stroke();
-
-					// draw puck
-					ctx.beginPath();
-					ctx.strokeStyle = color('black');
-					ctx.beginPath();
-					ctx.arc(state[0], state[1], 4, 0, 2 * Math.PI);
-					ctx.stroke();
-				}
-			};
-		</script>
-	</head>
-
-	<body>
-		<div class="reveal">
-			<div class="slides">
-				<!-- Use external markdown resource, separate slides by three newlines; vertical slides by two newlines -->
-				<section
-					data-separator="^\n\n\n"
-					data-separator-vertical="^\n\n"
-				></section>
-
-				<!-- Slides are separated by three dashes (the default) -->
-				<section data-markdown>
-					<script type="text/template">
-						## Policy Gradient Methods
-						### REINFORCE
-
-						_TODO: hook animation of puck env
-					</script>
-				</section>
-
-				<section>
-					<section data-markdown>
-						<script type="text/template">
-						## Introduction
-						### What is Reinforcement-Learning?
-					
-						* Machine learning technique
-						* Unsupervised
-						* Agent learns through interaction with an _ENVIRONMENT_
-						</script>
-					</section>
-                </section>
-
-				<section>
-					<section data-markdown>
-						<script type="text/template">
-						## Environment
-						* Has...
-							* A state
-							* Transition dynamics
-							* A reward function
-						---
-						## Environment
-						* Sample a trajectory...
-							1. Choose an action $a_t$ given the current state $s_t$
-							2. Environment responds with $r_{t+1}$ and $s_{t+1}$
-							3. Repeat
-
-						_The agent's goal is to maximize cumulative reward_
-						---
-						## Environment
-						* Formally is a Markov Descision Process (MDP)
-						* Is a tuple $(S, A, P, R, \gamma)$
-							* $S$ is a finite set of states
-							* $A$ is a finite set of actions
-							* $P$ is a state transition probability matrix
-							* $P_{s_{t}s_{t+1}}^a=\mathop{\mathbb{P}}[s_{t+1}|s_t,a_t]$
-							* $R$ is a reward function, $R_{s}^a = \mathop{\mathbb{E}}[r_{t+1}|s_t,a_t]$
-							* $\gamma$ is a discount factor [0, 1]
-						</script>
-					</section>
-
-					<section>
-							_TODO: visualization of state transitions occuring_
-					</section>
+    <head>
+        <meta charset="utf-8" />
+
+        <title>reveal.js - Markdown Example</title>
+
+        <link rel="stylesheet" href="../dist/reveal.css" />
+        <link rel="stylesheet" href="../dist/theme/solarized.css" id="theme" />
+
+        <!-- <link rel="stylesheet" href="../dist/plugin/highlight/monokai.css" /> -->
+
+        <script name="ui">
+            CTX = {}
+
+            function when_visible(id, cb)
+            {
+                let visible_cb = (entries, observer) => {
+                    entries.forEach((entry) => {
+                        window.when_visible_element_callbacks[entry.target.id](entry.isIntersecting);
+                    });
+                };
+
+                if (!window.when_visible_observer) {
+                    window.when_visible_observer = new IntersectionObserver(visible_cb, {
+                        root: null,
+                        rootMargin: '0px',
+                        threshold: 0.9,
+                    });
+                    window.when_visible_element_callbacks = {};
+                }
+
+                let ele = document.getElementById(id);
+                window.when_visible_element_callbacks[id] = cb;
+                window.when_visible_observer.observe(ele);
+            }
+
+            function animate(id, duration) {
+                if (!window.animation_intervals) {
+                    window.animation_intervals = {};
+                }
+
+                return {
+                    using: function(animation) {
+                        return {
+                            when: function(condition) {
+                                if (condition) {
+                                    window.animation_intervals[id] = setInterval(animation, duration);
+                                    console.log('setInverval: ' + duration + ' for ' + id);
+                                } else if (window.animation_intervals[id]) {
+                                    clearInterval(window.animation_intervals[id]);
+                                    delete window.animation_intervals[id];
+                                    console.log('clearInterval for ' + id);
+                                }
+                            }
+                        };
+                    }
+                };
+            }
+
+            function animate_when_visible(params, animation_cb) {
+                when_visible(params.id, (visible) => {
+                    animate(params.id, 1000 / params.fps).using(animation_cb)
+                                                         .when(visible);
+                });
+            }
+
+            function setTheme(theme) {
+                window.myPreferedTheme = theme;
+            }
+
+            function detectSystemTheme() {
+                if (window.myPreferedTheme) return window.myPreferedTheme;
+                if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+                    return 'dark';
+                } else {
+                    return 'light';
+                }
+            }
+
+            function color(name) 
+            {
+                return {
+                    'dark': {
+                        'LightGray': 'LightGray',
+                        'black': 'white'
+                    },
+                    'light': {
+                        'LightGray': 'DarkGray',
+                        'black': 'black'
+                    }
+                }[detectSystemTheme()][name];
+            }
+
+            function ctx_cache(e)
+            {
+                if (typeof e == 'string') {
+                    e = document.getElementById(e);
+                }
+
+                let just_added = false;
+                if (e.id in CTX == false) {
+                    CTX[e.id] = e.getContext('2d');
+                    just_added = true;
+                } 
+
+                if (just_added || e.offsetWidth != CTX[e.id].width || e.offsetHeight != CTX[e.id].height) {
+                    const dpr = window.devicePixelRatio || 1;
+                    const rect = e.getBoundingClientRect();
+                    e.width = rect.width * dpr;
+                    e.height = rect.height * dpr;
+                    CTX[e.id].scale(dpr, dpr);
+                    //e.style.width = `${rect.width}px`;
+                    //e.style.height = `${rect.height}px`;
+                    // These are just to check for size changes and have no other impact
+                    CTX[e.id].width = e.offsetWidth;
+                    CTX[e.id].height = e.offsetHeight;
+                    CTX[e.id].wants_redraw = true;
+                    console.log("updated canvas size");
+                } else {
+                    CTX[e.id].wants_redraw = false;
+                }
+
+                return CTX[e.id];
+            }
+
+            function clear(cvsId)
+            {
+                const e = document.getElementById(cvsId);
+                const ctx = ctx_cache(e);
+                ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+            }
+
+            function text(ctx_cvs_or_id, message, point, params)
+            {
+                let ctx = ctx_cvs_or_id;
+                if (typeof ctx_cvs_or_id == 'string') {
+                    ctx = ctx_cache(document.getElementById(ctx_cvs_or_id));
+                }
+                else if (ctx_cvs_or_id instanceof HTMLCanvasElement) {
+                    ctx = ctx_cache(ctx_cvs_or_id);
+                }
+
+                params = params || {};
+                ctx.textAlign = params.textAlign || 'center';
+                ctx.textBaseline = params.textBaseline || 'bottom';
+                ctx.font = params.font || '16px JetBrains Mono';
+                ctx.fillStyle = params.fillStyle || color('black');
+
+                if ('angle' in params) {
+                    ctx.save();
+                    ctx.translate(point[0], point[1]);
+                    ctx.rotate(params.angle);
+                    point = [0, 0];
+                }
+
+                ctx.fillText(message, point[0], point[1]);
+
+                if ('angle' in params) {
+                    ctx.restore();
+                }
+            }
+
+            function line(ctx, x0, y0, x1, y1)
+            {
+                ctx.beginPath(); 
+                ctx.moveTo(x0, y0); 
+                ctx.lineTo(x1, y1); 
+                ctx.stroke();
+            }
+
+            function slider_param(event)
+            {
+                if (!event) { event = { currentTarget: { value: 0 }}; }
+                return parseFloat(event.currentTarget.value);
+            }
+
+            let px = (ctx, x) => {
+                const dpr = window.devicePixelRatio || 1;
+                let w = ctx.canvas.width / dpr;
+                let h = ctx.canvas.height / dpr;
+                let pixels_per_unit = h / 2;
+                return x * pixels_per_unit + w / 2;
+            };
+
+            let py = (ctx, y) => {
+                const dpr = window.devicePixelRatio || 1;
+                let w = ctx.canvas.width / dpr;
+                let h = ctx.canvas.height / dpr;
+                let pixels_per_unit = h / 2;
+                return -y * pixels_per_unit + h / 2;
+            };
+
+            function plot(cvsId, fn, params)
+            {
+                const e = document.getElementById(cvsId);
+                const dpr = window.devicePixelRatio || 1;
+                const ctx = ctx_cache(e);
+                let w = ctx.canvas.width / dpr;
+                let h = ctx.canvas.height / dpr;
+                let pixels_per_unit = h / 2;
+
+                if (params) {
+                    ctx.strokeStyle = 'strokeStyle' in params ? params.strokeStyle : color('black');
+                    ctx.lineWidth = 'lineWidth' in params ? params.lineWidth : 2;
+                    if ('lineDash' in params) { ctx.setLineDash(params.lineDash); }
+                    else { ctx.setLineDash([]); }
+                }
+                else {
+                    ctx.strokeStyle = color('black');
+                    ctx.lineWidth = 2;
+                    ctx.setLineDash([]);
+                }
+
+                let trace = new Path2D();
+                for (let x = -(w/2) / pixels_per_unit; x < w / pixels_per_unit; x += 0.01)
+                {
+                    let y = fn(x, params);
+                    if (x == -(w/2) / pixels_per_unit) { trace.moveTo(px(ctx, x), py(ctx, y)); }
+                    else { trace.lineTo(px(ctx, x), py(ctx, y)); }
+                }
+
+                if (params && 'label' in params) {
+                    let y = fn(params.label.x, params);
+                
+                    let padding = params.label.padding ? params.label.padding : -10;
+                    let textMetrics = ctx.measureText(params.label.text);
+                    let top = py(ctx, y) + padding - textMetrics.actualBoundingBoxAscent;
+                    let bottom = py(ctx, y) + padding + textMetrics.actualBoundingBoxDescent;
+                    console.log(top);
+                    if (top < 0 || bottom > h) {
+                        ctx.textBaseline = y > 0 ? 'top' : 'bottom';
+                        padding = -padding;
+                    }
+
+                    text(ctx, params.label.text, [px(ctx, params.label.x), py(ctx, y) + padding]);
+                }
+
+                ctx.stroke(trace);
+            }
+        </script>
+        <script name="math">
+            function fin_diff(f, x, h)
+            {
+                return (f(x + h) - f(x - h)) / (2 * h);
+            }
+
+            let rows = (A) => { return A.length; }
+            let cols = (A) => { return A[0].length; }
+            let rnd = () => { return Math.random() * 2 - 1; };
+
+            let zeros = (r, c) => { 
+                let z = Array(r);
+
+                for (let i = 0; i < r; i++) {
+                    z[i] = Array(c).fill(0);
+                }
+
+                return z;
+            };
+
+            function matmul(A, B)
+            {
+                if (cols(A) != rows(B)) { throw "Matrix dimensions do not match"; }
+
+                let C = [];
+                for (let r = 0; r < rows(A); r++)
+                {
+                    C.push([]);
+                    for (let c = 0; c < cols(B); c++)
+                    {
+                        let sum = 0;
+                        for (let k = 0; k < cols(A); k++)
+                        {
+                            sum += A[r][k] * B[k][c];
+                        }
+                        C[r].push(sum);
+                    }
+                }
+                return C;
+            }
+
+            function matadd(A, B)
+            {
+                if (rows(A) != rows(B) || cols(A) != B[0].length) { throw "Matrix dimensions do not match"; }
+
+                let C = [];
+                for (let i = 0; i < rows(A); i++)
+                {
+                    C.push([]);
+                    for (let j = 0; j < cols(A); j++)
+                    {
+                        C[i].push(A[i][j] + B[i][j]);
+                    }
+                }
+                return C;
+            }
+
+            function matscl(A, s)
+            {
+                let B = [];
+                for (let i = 0; i < rows(A); i++)
+                {
+                    B.push([]);
+                    for (let j = 0; j < cols(A); j++)
+                    {
+                        B[i].push(A[i][j] * s);
+                    }
+                }
+                return B;
+            }
+
+            function vecsub(a, b)
+            {
+                if (a.length != b.length) { throw "Vector dimensions do not match"; }
+                let c = [];
+                for (let i = 0; i < a.length; i++)
+                {
+                    c.push(a[i] - b[i]);
+                }
+                return c;
+            }
+
+            function vecscl(a, s)
+            {
+                let b = [];
+                for (let i = 0; i < a.length; i++)
+                {
+                    b.push(a[i] * s);
+                }
+                return b;
+            }
+
+            function randmat(rows, cols)
+            {
+                let A = [];
+                for (let i = 0; i < rows; i++)
+                {
+                    A.push([]);
+                    for (let j = 0; j < cols; j++)
+                    {
+                        A[i].push(Math.random() - 0.5);
+                    }
+                }
+                return A;
+            }
+
+            function softmax(z)
+            {
+                let sum = z.reduce((acc, val) => acc + Math.exp(val), 0);
+                return z.map(val => Math.exp(val) / sum);
+            }
+
+            function softermax(z)
+            {
+                let y = softmax(z);
+                let max_idx = y.argmax();
+                if (y[max_idx] > 0.9) {
+                    let rem = y[max_idx] - 0.9;
+                    y[max_idx] = 0.9;
+                    let b = 0;
+                    for (let i = 0; i < y.length; i++) { if (i != max_idx) { b += y[i]; } }
+                    for (let i = 0; i < y.length; i++) {
+                        if (i == max_idx) continue;
+                        y[i] += (y[i]/b) * rem;
+                    }
+                }
+
+                return y;
+            }
+
+            function leaky_relu(z)
+            {
+                return z.map(row => row.map(val => val > 0 ? val : 0.01 * val));
+            }
+
+            function dist(p0, p1)
+            {
+                return Math.sqrt(Math.pow(p0[0] - p1[0], 2) + Math.pow(p0[1] - p1[1], 2));
+            }
+
+            function sample_multinomial(p)
+            {
+                let r = Math.random();
+                let sum = 0;
+                for (let i = 0; i < p.length; i++)
+                {
+                    sum += p[i];
+                    if (r < sum) { return i; }
+                }
+            }
+        </script>
+        <script name="pg">
+            function policy_grad(pi_pr, theta, x, a, h)
+            {
+                // TODO: make this operate on theta which is a tensor instead of a matrix
+                let G = zeros(rows(theta), cols(theta));
+
+                for (let r = 0; r < rows(theta); r++) {
+                    for (let c = 0; c < cols(theta); c++) {
+                        let theta_plus = theta.map((row, i) => row.map((val, j) => {
+                            return i == r && j == c ? val + h : val;
+                        }));
+
+                        let theta_minus = theta.map((row, i) => row.map((val, j) => {
+                            return i == r && j == c ? val - h : val;
+                        }));
+
+                        let pi_plus = pi_pr(theta_plus, x, a);
+                        let pi_minus = pi_pr(theta_minus, x, a);
+
+                        let grad = (pi_plus - pi_minus)  / (2 * h);
+                        
+                        if (isNaN(grad)) {
+                            throw "NaN gradient element value"; 
+                        }
+                        G[r][c] = grad;
+                    }
+                }
+
+                return G;
+            }
+
+            function optimize(pi, theta, T, params)
+            {
+                params = params || {};  
+                params.alpha = params.alpha == undefined ? 0.1 : params.alpha;
+                params.gamma = params.gamma || 0.99;
+
+                if (!(T instanceof Array)) { T = [T]; }
+
+                let G = zeros(rows(theta), cols(theta));//theta.map(theta_i => zeros(theta_i.rows(), theta_i.cols()));
+
+                let pi_pr = params.pi_pr || ((theta, x, a) => { return pi(theta, x).pr[a]; });
+
+                for (let ti = 0; ti < T.length; ti++) {
+                    const p = 1 / T[ti].X.length;
+
+                    for (let t = 0; t < T[ti].X.length; t++) {
+                        let G_t = matscl(policy_grad(pi_pr, theta, T[ti].X[t], T[ti].A[t], 0.001), p);
+                        G = matadd(G, matscl(G_t, T[ti].R[t]/* * Math.pow(params.gamma, t)*/));
+                    }
+
+                    G = matscl(G, 1 / T.length);
+                }
+
+                return matadd(theta, matscl(G, params.alpha));
+            }
+
+
+            function draw_probabilities(cvsId, p, names, left_top, right_bottom, annotator)
+            {
+                const e = document.getElementById(cvsId);
+                const dpr = window.devicePixelRatio || 1;
+                const ctx = ctx_cache(e);
+
+                left_top = left_top || [0, 0];
+                right_bottom = right_bottom || [ctx.canvas.width / dpr, ctx.canvas.height / dpr];
+                annotator = annotator || function(ctx, i, x, y) {};
+
+                let w = right_bottom[0] - left_top[0];
+                let h = right_bottom[1] - left_top[1];
+
+                let path = new Path2D();
+                path.moveTo(left_top[0], right_bottom[1]);
+                p = [].concat([0], p)
+                for (let i = 0; i < p.length; i++)
+                {
+                    let x = left_top[0] + w * i / p.length;
+                    let y = right_bottom[1] - h * p[i];
+                    path.lineTo(x, y);
+                }
+                path.lineTo(right_bottom[0], right_bottom[1]);
+                ctx.stroke(path);
+
+                for (let i = 0; i < p.length; i++)
+                {
+                    let x = (left_top[0] + w * i / p.length);
+                    let y = right_bottom[1] - h * p[i];
+                    annotator(ctx, i, x, y);
+                    if (i > 0 && i < p.length) {
+                        let text_metrics = ctx.measureText(names[i-1]);
+                        let th = text_metrics.height / 2;
+                        let tw = text_metrics.width;
+                        ctx.fillStyle = 'red';
+                        ctx.fillRect(x - (10 + tw / 2), y - (10 + th / 2), text_metrics.width + (20 + tw), text_metrics.height + (20 + th));
+                        let y_offset = y > 30 ? -10 : 20;
+                        text(ctx, names[i-1], [x, y + y_offset]);
+                    }
+                }
+            }
+
+            function draw_reward_plot(cvsId, R, left_top, right_bottom)
+            {
+                const e = document.getElementById(cvsId);
+                const ctx = ctx_cache(e);
+                const dpr = window.devicePixelRatio || 1;
+
+                left_top = left_top || [0, 0];
+                right_bottom = right_bottom || [ctx.canvas.width / dpr, ctx.canvas.height / dpr];
+
+                let w = right_bottom[0] - left_top[0];
+                let h = right_bottom[1] - left_top[1];
+
+                let min = Math.min(Math.min(...R),-1);
+                let max = Math.max(Math.max(...R),1);
+                let range = max - min;
+
+                let py = (y) => (y - min) / range;
+                let y = (p) => (right_bottom[1] * (1 - p)) + left_top[1] * p;
+                ctx.beginPath();
+                ctx.moveTo(left_top[0], y(py(0)));
+                ctx.lineTo(right_bottom[0], y(py(0)));
+                ctx.setLineDash([5, 15]);
+                ctx.strokeStyle = color('LightGray');
+                ctx.stroke();
+                ctx.setLineDash([]);
+
+                let path = new Path2D();
+                for (let i = 0; i < R.length; i++)
+                {
+                    let x = left_top[0] + w * i / R.length;
+                    let p = py(R[i]);
+                    if (i == 0) {
+                        path.moveTo(x, y(p));
+                    } else {
+                        path.lineTo(x, y(p));       
+                    }
+
+                    if (i == R.length - 1) {
+                        let str = parseInt(R[i]).toString();
+                        let text_metrics = ctx.measureText(str);
+                        let th = text_metrics.height / 2;
+                        let tw = text_metrics.width;
+                        ctx.font = '16px JetBrains Mono';
+                        ctx.fillStyle = color('black');
+                        let x_off = x + tw > w ? -tw : 0;
+                        ctx.fillText(str, x + x_off, y(p) + 16);
+                    }
+                }
+                ctx.strokeStyle = color('black');
+                ctx.stroke(path);
+            }
+
+            let basic = {
+                target: 1,
+                pi: function(theta, x) {
+                    let z = matmul([x], theta);
+                    let p = softmax(z[0]);
+                    let a_idx = sample_multinomial(p);
+
+                    return { pr: p, idx: a_idx };
+                },
+                sample_trajectory: function(theta, for_visualization) {
+                    let x_t = [1];
+                    let T = { X: [], A_pr: [], A: [], R: []};
+
+                    for (let t = 0; t < 1; t++) {
+                        let a_t = basic.pi(theta, x_t);
+                        let r_t = basic.step(T, x_t, a_t, 0.99);
+                    }
+
+                    return T;
+                },
+                step: function(T, x_t, a_t, gamma)
+                {
+                    let r_t = a_t.idx == basic.target ? 1 : -1;
+
+                    T.X.push(x_t);
+                    T.R.push(r_t);
+                    T.A_pr.push(a_t.pr);
+                    T.A.push(a_t.idx);
+                },
+            };
+
+            let puck = {
+                w: 100,
+                h: 100,
+                pi: function(theta, x) {
+                    // 1x2 * 2x6 -> 1x6
+                    let dx = x[2] - x[0];
+                    let dy = x[3] - x[1];
+                    let mag = Math.sqrt(dx * dx + dy * dy) + 0.1;
+                    let _x = [dx/mag, dy/mag];
+
+                    let z = matmul([_x], theta)[0];
+                    let z_x = z.slice(0, 3);
+                    let z_y = z.slice(3, 6);
+                    let pr_x = softmax(z_x);
+                    let pr_y = softmax(z_y);
+                    let a_x_idx = sample_multinomial(pr_x);
+                    let a_y_idx = sample_multinomial(pr_y);
+
+                    return { pr: [pr_x, pr_y], idx: [a_x_idx, a_y_idx] };
+                },
+                dist_to_target: function(x) {
+                    return dist([x[0],x[1]], [x[2], x[3]]);
+                },
+                initial_state: function(left_top, right_bottom, randomize_target) {
+                    left_top = left_top || [0, 0];
+                    right_bottom = right_bottom || [500, 500];
+                    let r = Math.random;
+                    let w = right_bottom[0] - left_top[0];
+                    let h = right_bottom[1] - left_top[1];
+                    let o_x = left_top[0], o_y = left_top[1];
+                    // in the background, trajectories could be sampled this way so there isn't an axial bias built into
+                    // the optimized policy. But for visualization purposes, the puck and targets could be spawned anywhere
+                    let targ_x = randomize_target ? r() * w : w / 2;
+                    let targ_y = randomize_target ? r() * h : h / 2; 
+                    let x_0 = [o_x + r() * w, o_y + r() * h, o_x + targ_x, o_y + targ_y];
+
+                    for(var i = 0; i < 10 && puck.dist_to_target(x_0) <= 10; i++) {
+                        x_0 = [o_x + r() * w, o_y + r() * h, o_x + targ_x, o_y + targ_y];
+                    }
+
+                    return x_0;
+                },
+                sample_trajectory: function(theta, left_top, right_bottom, randomize_target) {
+                    let x_t = puck.initial_state(left_top, right_bottom, randomize_target);
+
+                    let T = { X: [], A_pr: [], A: [], R: []};
+
+                    for (let t = 0; t < 5 * 60; t++) {
+                        let a_t = puck.pi(theta, x_t);
+                        let r_t = puck.step(T, x_t, a_t, 0.99);
+                        if (r_t == null) {
+                            break;
+                        }
+                        x_t = T.X[t];
+
+                    }
+
+                    return T;
+                },
+                reward: function(x_t, x_t1)
+                {
+                    let d0 = puck.dist_to_target(x_t);
+                    let d1 = puck.dist_to_target(x_t1);
+                    return d0 - d1;
+                },
+                step: function(T, x_t, a_t, gamma)
+                {
+                    let x_t1 = zeros(4, 1);
+
+                    x_t1[0] = x_t[0] + (a_t.idx[0] - 1) * 2;
+                    x_t1[1] = x_t[1] + (a_t.idx[1] - 1) * 2;
+                    x_t1[2] = x_t[2];
+                    x_t1[3] = x_t[3];
+
+                    let d1 = puck.dist_to_target(x_t1);
+
+                    let r_t = puck.reward(x_t, x_t1);
+                    if (d1 < 5) { return null; }
+
+                    T.X.push(x_t1);
+                    T.R.push(r_t);
+                    T.A_pr.push(a_t.pr);
+                    T.A.push(a_t.idx);
+                    return r_t;
+                },
+                draw: function(cvsId, time, trajectory, left_top, right_bottom)
+                {
+                    const e = document.getElementById(cvsId);
+                    const ctx = ctx_cache(e);
+                    const dpr = window.devicePixelRatio || 1;
+
+                    let state = trajectory.X[time];
+
+                    if (!left_top) { left_top = [0, 0]; }
+                    if (!right_bottom) { right_bottom = [ctx.canvas.width/dpr, ctx.canvas.height/dpr]; }
+
+                    puck.w = right_bottom[0] - left_top[0];
+                    puck.h = right_bottom[1] - left_top[1];
+
+                    if (state == undefined) {
+                        debugger;
+                    }
+
+                    // draw target
+                    ctx.beginPath();
+                    ctx.strokeStyle = color('black');
+                    ctx.moveTo(state[2] - 5, state[3] - 5);
+                    ctx.lineTo(state[2] + 5, state[3] + 5);
+                    ctx.moveTo(state[2] - 5, state[3] + 5);
+                    ctx.lineTo(state[2] + 5, state[3] - 5);
+                    ctx.stroke();
+
+                    // draw path
+                    ctx.beginPath();
+                    ctx.setLineDash([5, 15]);
+                    ctx.strokeStyle = color('LightGray');
+                    let x = trajectory.X[0];
+                    ctx.moveTo(x[0], x[1]);
+                    for (let t = 1; t < time; t++) {
+                        x = trajectory.X[t];
+                        ctx.lineTo(x[0], x[1]);
+                    }
+                    ctx.setLineDash([]);
+                    ctx.stroke();
+
+                    // draw puck
+                    ctx.beginPath();
+                    ctx.strokeStyle = color('black');
+                    ctx.beginPath();
+                    ctx.arc(state[0], state[1], 4, 0, 2 * Math.PI);
+                    ctx.stroke();
+                }
+            };
+        </script>
+    </head>
+
+    <body>
+        <div class="reveal">
+            <div class="slides">
+                <!-- Use external markdown resource, separate slides by three newlines; vertical slides by two newlines -->
+                <section
+                    data-separator="^\n\n\n"
+                    data-separator-vertical="^\n\n"
+                ></section>
+
+                <!-- Slides are separated by three dashes (the default) -->
+                <section data-markdown>
+                    <script type="text/template">
+                        ## Policy Gradient Methods
+                        ### REINFORCE
+
+                        _TODO: hook animation of puck env
+                    </script>
                 </section>
 
                 <section>
-					<section data-markdown>
-						<script type="text/template">
-							## What are Policy Gradient Methods?
-							
-							* Elegant solution to the RL problem
-							* No knowledge of environment dynamics
-							* No estimation of a value function
-							* Seeks to directly optimize the agent's _POLICY_
-						</script>
-					</section>
+                    <section data-markdown>
+                        <script type="text/template">
+                        ## Introduction
+                        ### What is Reinforcement-Learning?
+                    
+                        * Machine learning technique
+                        * Agent learns through interaction with an _ENVIRONMENT_
+                        </script>
+                    </section>
                 </section>
 
                 <section>
-					<section data-markdown>
-						<script type="text/template">
-							## Policy
-							$\pi_\theta(a|s)$
-							* The core of an RL agent
-							* Function which maps state $s$ to action $a$
-							* Mapping of $s$ to $a$ is defined by parameters $\theta$
-							* Can be defined for discrete or continous action spaces
-							---
-							## Policy
-							$\pi_\theta(a|s)$
-							* In our case...
-								* The action space is discrete
-								* The policy is a probability distribution
-									* For all action classes
-									* Stochastic
-							---
-							## Policy
-							$$\pi_\theta(a|s) = \frac{e^{z}}{\sum_{i}e^{z_{i}}}$$
-							$$z = \theta\phi(s)$$
-							* $\phi$ is a function that extracts features from $s$
-							* We can choose a specific action as...
+                    <section data-markdown>
+                        <script type="text/template">
+                        ## Environment
+                        * Has...
+                            * A state
+                            * Transition dynamics
+                            * A reward signal
+                        ---
+                        ## Environment
+                        * Sample a trajectory...
+                            1. Agent observes state $s_t$
+                            2. Chooses action $a_t$
+                            3. Environment returns:
+                                * Next state $s_{t+1}$
+                                * Reward $r_{t+1}$
+                            4. Repeat
 
-							$$a_t \sim \pi_{\theta}(s)$$
-						</script>
-					</section>
-					<section>
-						<ul>
-							<li>_TODO: visualization of policy probability distribution for different states_</li>
-							<li>_TODO: visualization of box of action classes_</li>
-							<li>_TODO: visualization of sampling occuring_</li>
-						</ul>
-					</section>
+                        _The agent's goal is to maximize cumulative reward_
+                        ---
+                        ## Environment
+                        ### Markov Decision Process (MDP)
+
+                        An MDP is defined by the tuple:
+
+                        $$(\mathcal{S}, \mathcal{A}, P, R, \gamma)$$
+
+                        * $\mathcal{S}$: state space  
+                        * $\mathcal{A}$: action space  
+                        * $P(\cdot \mid s,a)$: transition dynamics  
+                        * $R(s,a)$: expected reward  
+                        * $\gamma \in [0,1]$: discount factor
+                        ---
+                        ## Environment
+                        #### Transition Dynamics
+
+                        $P(\cdot \mid s,a)$ defines a distribution over next states:
+
+                        $$s_{t+1} \sim P(\cdot \mid s_t, a_t)$$
+
+                        * Discrete states:
+                            $$P(s' \mid s,a) = \mathbb{P}(s_{t+1} = s')$$
+
+                        * Continuous states:
+                            $$p(s' \mid s,a) \text{ is a probability density}$$
+                        ---
+                        ## Environment
+                        #### Reward Function
+
+                        $$R(s,a) = \mathbb{E}[r_{t+1} \mid s_t = s, a_t = a]$$
+
+                        * Can also be stochastic:
+                            $$r_{t+1} \sim P(r \mid s_t, a_t)$$
+                        </script>
+                    </section>
+
+                    <section>
+                            _TODO: visualization of state transitions occuring_
+                    </section>
                 </section>
 
                 <section>
-					<section>
-
-						<h2>Policy Gradient Methods</h2>
-						$$J(\theta) = \mathop{\mathbb{E}}_{\tau \sim \pi_{\theta}}[R(\tau)]$$
-						<ul>
-							<li>Our objective is to maximize $J(\theta)$</li>
-							<li>We will do so by fiddling with $\theta$</li>
-						</ul>
-						<p>
-						Lets see how we get there..
-						</p>
-					</section>
-                	<section>
-	                	<h2>Policy Gradient Methods</h2>
-						First, we reframe the expectation as an integral. By the definition of the expectation.
-						$$
-						\mathop{\mathbb{E}}_{x \sim p(x)}[f(x)]=\int f(x)p(x) dx
-						$$
-						We rewrite as...
-						
-						$$
-						\mathop{ \mathbb{E}}_{ \tau \sim \pi}[R(\tau)] = \int R(\tau) p_{ \theta }(\tau) d\tau
-						$$
-                	</section>
-
-                	<section>
-	                	<h2>Policy Gradient Methods</h2>
-	                	Next, we take the gradient w.r.t. $\theta$
-	                	$$
-	                	\nabla_{\theta}J(\theta) = \nabla_{\theta} \int R(\tau) p_{ \theta }(\tau) d\tau
-	                	$$
-	                	Recognizing that $R(\tau)$ has no dependence on $\theta$...
-	                	$$
-	                	\nabla_{\theta}J(\theta) = \int R(\tau) \nabla_{\theta} p_{ \theta }(\tau) d\tau
-	                	$$
-	                	This is great, but no longer an expectation...
-                	</section>
-
-                	<section>
-                		<h2>Policy Gradient Methods</h2>
-                		<p>
-                		A quick aside... 
-                		Consider a function
-                		</p>
-                		$$
-                		f(x)
-                		$$
-                		<p>Take the log of that function</p>
-                		$$
-                		log(f(x))
-                		$$
-                		<p>and differentiate it</p>
-                		$$
-                		\frac{d}{dx} log(f(x)) = \frac{f'(x)}{f(x)}
-                		$$
-                		<p>Take note of this structure</p>
-                	</section>
-
-                	<section>
-	                	<h2>Policy Gradient Methods</h2>
-	                	Right now we have...
-	                	$$
-	                	\nabla_{\theta} p_{ \theta }(\tau)
-	                	$$
-	                	However, we can be clever and add the following...
-	                	$$
-	                	\textcolor{red}{p_{\theta}(\tau)}\frac{\nabla_{\theta}p_{ \theta }(\tau)}{\textcolor{red}{p_{\theta}(\tau)}}
-	                	$$
-	                	$p_{\theta}(\tau)$ and $\frac{1}{p_{\theta}(\tau)}$ cancel out, so it changes nothing about our gradient.
-                	</section>
-
-                	<section>
-	                	<h2>Policy Gradient Methods</h2>
-	                	However you might have noticed that this
-	                	$$
-	                	p_{\theta}(\tau)\textcolor{red}{\frac{\nabla_{\theta}p_{ \theta }(\tau)}{\textcolor{red}{p_{\theta}(\tau)}}}
-	                	$$
-	                	Looks an awful lot like this
-                		$$
-                		\frac{d}{dx} log(f(x)) = \textcolor{red}{\frac{f'(x)}{f(x)}}
-                		$$
-                	</section>
-                	
-                	<section>
-	                	<h2>Policy Gradient Methods</h2>
-	                	Which leads us to what's called the <i>likelihood-ratio trick</i>
-                		$$
-                		\nabla_{\theta} p_{ \theta }(\tau)=p_{\theta}(\tau)\frac{\nabla_{\theta}p_{ \theta }(\tau)}{p_{\theta}(\tau)}=p_{\theta}(\tau)\nabla_{\theta}log(p_{ \theta }(\tau))
-                		$$
-                		This allows us to transform this term in our integral
-	                	$$
-	                	\nabla_{\theta}J(\theta) = \int R(\tau) \textcolor{red}{\nabla_{\theta} p_{ \theta }(\tau)} d\tau
-	                	$$
-                		Into
-	                	$$
-	                	\nabla_{\theta}J(\theta) = \int R(\tau) \textcolor{red}{p_{\theta}(\tau)\nabla_{\theta}log(p_{ \theta }(\tau))} d\tau
-	                	$$
-                	</section>
-
-                	<section>
-	                	<h2>Policy Gradient Methods</h2>
-	                	Now we can take our integral
-	                	$$
-	                	\nabla_{\theta}J(\theta) = \int \textcolor{orange}{R(\tau)} \textcolor{red}{p_{\theta}(\tau)}\textcolor{orange}{\nabla_{\theta}log(p_{ \theta }(\tau))} d\tau
-	                	$$
-	                	And rearrange it into something recognizable as an expectation
-	                	$$
-	                	\nabla_{\theta}J(\theta) = \int \textcolor{orange}{R(\tau)\nabla_{\theta}log(p_{ \theta }(\tau))} \textcolor{red}{p_{\theta}(\tau)}d\tau
-	                	$$
-                	</section>
-
-                	<section>
-	                	<h2>Policy Gradient Methods</h2>
-	                	However we still have $p_{\theta}(\tau)$ in our expectation. Which includes both our policy and the environment.
-	                	$$
-	                	p_{\theta}(\tau)=\prod_{t}\pi_{\theta}(a_{t}|s_{t})P(s_{t+1}|s_{t},a_{t}) 
-	                	$$
-	                	If we take the log of both sides
-	                	$$
-	                	log(p_{\theta}(\tau))=\sum_{t}log(\pi_{\theta}(a_{t}|s_{t}))+\sum_{t}log(P(s_{t+1}|s_{t},a_{t})) 
-	                	$$
-
-                	</section>
-
-                	<section>
-	                	<h2>Policy Gradient Methods</h2>
-	                	Now we can take our integral
-	                	$$
-	                	\nabla_{\theta}J(\theta) = \int \textcolor{orange}{R(\tau)} \textcolor{red}{p_{\theta}(\tau)}\textcolor{orange}{\nabla_{\theta}log(p_{ \theta }(\tau))} d\tau
-	                	$$
-	                	And rearrange it into something recognizable as an expectation
-	                	$$
-	                	\nabla_{\theta}J(\theta) = \int \textcolor{orange}{R(\tau)\nabla_{\theta}log(p_{ \theta }(\tau))} \textcolor{red}{p_{\theta}(\tau)}d\tau
-	                	$$
-	                	Which is something we will be able to work with.
-                	</section>
-
-					<section>
-						<ul>
-							<li>_TODO: visualization of _</li>
-						</ul>
-					</section>
+                    <section data-markdown>
+                        <script type="text/template">
+                            ## What are Policy Gradient Methods?
+                            
+                            * Elegant solution to the RL problem
+                            * No knowledge of environment dynamics
+                            * No estimation of a value function
+                            * Seeks to directly optimize the agent's _POLICY_
+                        </script>
+                    </section>
                 </section>
 
                 <section>
-					<section data-markdown>
-						<script type="text/template">
-							## Environment
+                    <section data-markdown>
+                        <script type="text/template">
+                            ## Policy
+                            $\pi_\theta(a|s)$
+                            * The core of an RL agent
+                            * Function which maps state $s$ to action $a$
+                            * Mapping of $s$ to $a$ is defined by parameters $\theta$
+                            * Can be defined for discrete or continous state and action spaces
+                            ---
+                            ## Policy
+                            $\pi_\theta(a|s)$
+                            * In our case...
+                                * The state space is continuous
+                                * The action space is discrete
+                                * The policy is a probability distribution
+                                    * For all action classes
+                                    * Stochastic
+                            ---
+                            ## Policy
+                            $$z = \theta\phi(s)$$
+                            $\phi$ is a function that extracts features from $s$
+                            $$\pi_\theta(a|s) = \frac{e^{z_{a}}}{\sum_{i}e^{z_{i}}}$$
+                            We can choose a specific action as...
 
-							_TODO: visualization of state transitions occuring_
-						</script>
-					</section>
-					
-                	<!-- visualization of state transitions occuring here -->
+                            $$a_t \sim \pi_{\theta}(.|s_t)$$
+                        </script>
+                    </section>
+                    <section>
+                        <ul>
+                            <li>_TODO: visualization of policy probability distribution for different states_</li>
+                            <li>_TODO: visualization of box of action classes_</li>
+                            <li>_TODO: visualization of sampling occuring_</li>
+                        </ul>
+                    </section>
                 </section>
 
                 <section>
-					<section data-markdown>
-						<script type="text/template">
-							## Policy
+                    <section>
 
-							$$
-							\pi_{\theta}(a_{t} | s_{t})
-							$$
+                        <h2>Policy Gradient Methods</h2>
+                        $$J(\theta) = \mathop{\mathbb{E}}_{\tau \sim \pi_{\theta}}[R(\tau)]$$
+                        <ul>
+                            <li>Our objective is to maximize $J(\theta)$</li>
+                            <li>We will do so by fiddling with $\theta$</li>
+                        </ul>
+                        <p>
+                        Lets see how we get there..
+                        </p>
+                    </section>
+                    <section>
+                        <h4>Policy Gradient Methods</h4>
+                        First, we reframe the expectation as an integral. By the definition of the expectation.
+                        $$
+                        \mathop{\mathbb{E}}_{x \sim p(x)}[f(x)]=\int f(x)p(x) dx
+                        $$
+                        We rewrite as...
+                        
+                        $$
+                        \mathop{ \mathbb{E}}_{ \tau \sim \pi_{\theta}}[R(\tau)] = \int R(\tau) p_{ \theta }(\tau) d\tau
+                        $$
+                    </section>
 
-							* Function which maps state $s_t$ to an action $a_t$
-							* Can be defined for discrete or continous action spaces 
-							* Behavior defined by parameters $\theta$
+                    <section>
+                        <h4>Policy Gradient Methods</h4>
+                        Next, we take the gradient w.r.t. $\theta$
+                        $$
+                        \nabla_{\theta}J(\theta) = \nabla_{\theta} \int R(\tau) p_{ \theta }(\tau) d\tau
+                        $$
+                        Recognizing that $R(\tau)$ has no dependence on $\theta$...
+                        $$
+                        \nabla_{\theta}J(\theta) = \int R(\tau) \nabla_{\theta} p_{ \theta }(\tau) d\tau
+                        $$
+                        This is great, but no longer an expectation...
+                    </section>
 
-							_TODO: visualization of puck policy deterministically selecting action over many states_
-							---
-							## Policy
-							Stocastic policies
-							* $\pi_{\theta}$ is a probability distribution of actions for $x_t$
-							* We sample an action $a_t \sim \pi_{\theta}(s_t)$
+                    <section>
+                        <h4>Policy Gradient Methods</h4>
+                        <p>
+                        A quick aside... 
+                        Consider a function
+                        </p>
+                        $$
+                        f(x)
+                        $$
+                        <p>Take the log of that function</p>
+                        $$
+                        log(f(x))
+                        $$
+                        <p>and differentiate it</p>
+                        $$
+                        \frac{d}{dx} log(f(x)) = \frac{f'(x)}{f(x)}
+                        $$
+                        <p>Take note of this structure</p>
+                    </section>
 
-							_TODO: visualization of puck policy action distribution over many states_
-							---
-							## Policy
-							Stocastic policies - Discrete action space
+                    <section>
+                        <h4>Policy Gradient Methods</h4>
+                        Right now we have...
+                        $$
+                        \nabla_{\theta} p_{ \theta }(\tau)
+                        $$
+                        However, we can be clever and add the following...
+                        $$
+                        \textcolor{red}{p_{\theta}(\tau)}\frac{\nabla_{\theta}p_{ \theta }(\tau)}{\textcolor{red}{p_{\theta}(\tau)}}
+                        $$
+                        $p_{\theta}(\tau)$ and $\frac{1}{p_{\theta}(\tau)}$ cancel out, so it changes nothing about our gradient.
+                    </section>
 
-							$$
-							\pi_{\theta}(x) = softmax(\phi(x) \theta)
-							$$
+                    <section>
+                        <h4>Policy Gradient Methods</h4>
+                        However you might have noticed that this
+                        $$
+                        p_{\theta}(\tau)\textcolor{red}{\frac{\nabla_{\theta}p_{ \theta }(\tau)}{\textcolor{red}{p_{\theta}(\tau)}}}
+                        $$
+                        Looks an awful lot like this
+                        $$
+                        \frac{d}{dx} log(f(x)) = \textcolor{red}{\frac{f'(x)}{f(x)}}
+                        $$
+                    </section>
+                    
+                    <section>
+                        <h4>Policy Gradient Methods</h4>
+                        Which leads us to what's called the <i>likelihood-ratio trick</i>
+                        $$
+                        \nabla_{\theta} p_{ \theta }(\tau)=p_{\theta}(\tau)\frac{\nabla_{\theta}p_{ \theta }(\tau)}{p_{\theta}(\tau)}=p_{\theta}(\tau)\nabla_{\theta}log(p_{ \theta }(\tau))
+                        $$
+                        This allows us to transform this term in our integral
+                        $$
+                        \nabla_{\theta}J(\theta) = \int R(\tau) \textcolor{red}{\nabla_{\theta} p_{ \theta }(\tau)} d\tau
+                        $$
+                        Into
+                        $$
+                        \nabla_{\theta}J(\theta) = \int R(\tau) \textcolor{red}{p_{\theta}(\tau)\nabla_{\theta}log(p_{ \theta }(\tau))} d\tau
+                        $$
+                    </section>
 
-							where 							
-							
-							$\phi$ maps the state into some vector of features 
-							
-							$$
-							softmax(z) = \frac{e^{z}}{\sum_{i} e^{z_i}}
-							$$
+                    <section>
+                        <h4>Policy Gradient Methods</h4>
+                        Now we can take our integral
+                        $$
+                        \nabla_{\theta}J(\theta) = \int \textcolor{orange}{R(\tau)} \textcolor{red}{p_{\theta}(\tau)}\textcolor{orange}{\nabla_{\theta}log(p_{ \theta }(\tau))} d\tau
+                        $$
+                        And rearrange it into something recognizable as an expectation
+                        $$
+                        \nabla_{\theta}J(\theta) = \int \textcolor{orange}{R(\tau)\nabla_{\theta}log(p_{ \theta }(\tau))} \textcolor{red}{p_{\theta}(\tau)}d\tau
+                        $$
+                        Finally
+                        $$
+                        \nabla_{\theta}J(\theta) = \mathop{\mathbb{E}}_{\tau \sim \pi_{\theta}}[\textcolor{orange}{R(\tau)\nabla_{\theta}log(p_{ \theta }(\tau))}]
+                        $$
 
-							_TODO: visualization of puck policy drawing samples from action distribution many states_
+                    </section>
 
-						</script>
-					</section>
-					
-                	<!-- visualization of puck policy actions across many states -->
+                    <section>
+                        <h4>Policy Gradient Methods</h4>
+                        Unfortunately we still have $p_{\theta}(\tau)$ in our expectation. Which includes both our policy and the environment.
+                        $$
+                        p_{\theta}(\tau)=\prod_{t}\pi_{\theta}(a_{t}|s_{t})P(s_{t+1}|s_{t},a_{t}) 
+                        $$
+                        We can't compute this directly, but luckily the term in question is actually $\nabla_{\theta}log(p_{\theta}(\tau))$
+                        $$
+                        \nabla_{\theta}log(p_{\theta}(\tau))=\sum_{t}\nabla_{\theta}log(\pi_{\theta}(a_{t}|s_{t}))+\sum_{t}\nabla_{\theta}log(P(s_{t+1}|s_{t},a_{t})) 
+                        $$
+                        The product turns into an sum.
+                    </section>
+
+                    <section>
+                        <h4>Policy Gradient Methods</h4>
+                        
+                        And the environment dynamics term $P$ has no dependence on $\theta$, its gradient is 0
+                        $$
+                        \nabla_{\theta}log(p_{\theta}(\tau))=\sum_{t}\nabla_{\theta}log(\pi_{\theta}(a_{t}|s_{t}))+\sout{\sum_{t}\nabla_{\theta}log(P(s_{t+1}|s_{t},a_{t}))}
+                        $$
+                        Which leaves us with
+                        $$
+                        \nabla_{\theta}log(p_{\theta}(\tau))=\sum_{t}\nabla_{\theta}log(\pi_{\theta}(a_{t}|s_{t}))
+                        $$
+                    </section>
+
+                    <section>
+                        <h4>Policy Gradient Methods</h4>
+                        
+                        A quick substitution of 
+                        $$
+                        \nabla_{\theta}log(p_{\theta}(\tau))=\textcolor{orange}{\sum_{t}\nabla_{\theta}log(\pi_{\theta}(a_{t}|s_{t}))}
+                        $$
+                        Into
+                        $$
+                        \nabla_{\theta}J(\theta) = \mathop{\mathbb{E}}_{\tau \sim \pi_{\theta}}[R(\tau)\textcolor{orange}{\nabla_{\theta}log(p_{ \theta }(\tau))}]
+                        $$
+                        Gives us our final expectation
+                        $$
+                        \nabla_{\theta}J(\theta) = \mathop{\mathbb{E}}_{\tau \sim \pi_{\theta}}[R(\tau)\sum_{t}\nabla_{\theta}log(\pi_{\theta}(a_{t}|s_{t}))]
+                        $$
+                    </section>
                 </section>
-
 
                 <section>
-					<section data-markdown>
-						<script type="text/template">
-							## Policy
+                    <section data-markdown>
+                        <script type="text/template">
+                            ## How Can We Implement These Ideas?
 
-							$$
-							\pi_{\theta}(a_{t} | s_{t})
-							$$
-
-							* Function which maps state $s_t$ to an action $a_t$
-							* Can be defined for discrete or continous action spaces 
-							* Behavior defined by parameters $\theta$
-
-							_TODO: visualization of puck policy deterministically selecting action over many states_
-							---
-							## Policy
-							Stocastic policies
-							* $\pi_{\theta}$ is a probability distribution of actions for $x_t$
-							* We sample an action $a_t \sim \pi_{\theta}(s_t)$
-
-							_TODO: visualization of puck policy action distribution over many states_
-							---
-							## Policy
-							Stocastic policies - Discrete action space
-
-							$$
-							\pi_{\theta}(x) = softmax(\phi(x) \theta)
-							$$
-
-							where 							
-							
-							$\phi$ maps the state into some vector of features 
-							
-							$$
-							softmax(z) = \frac{e^{z}}{\sum_{i} e^{z_i}}
-							$$
-
-							_TODO: visualization of puck policy drawing samples from action distribution many states_
-
-						</script>
-					</section>
-					
-                	<!-- visualization of puck policy actions across many states -->
+                        </script>
+                    </section>                    
                 </section>
 
-			</div>
-		</div>
+                <section>
+                    <section>
+                        <h2>Implementation</h2>
+                    </section>
 
-		<script src="../dist/reveal.js"></script>
-		<script src="../dist/reveal.js"></script>
-		<script src="../dist/plugin/markdown.js"></script>
-		<script src="../dist/plugin/highlight.js"></script>
-		<script src="../dist/plugin/notes.js"></script>
-		<script src="../dist/plugin/math.js"></script>
+                    <section>
+                        <ul>
+                            <li>_TODO: visualization of _</li>
+                        </ul>
+                    </section>
+                </section>
+            </div>
+        </div>
 
-		<script>
-			Reveal.initialize({
-				controls: true,
-				progress: true,
-				history: true,
-				center: false,
-				maxScale: 1,
-				markdown: {
-					smartypants: true,
-				},
+        <script src="../dist/reveal.js"></script>
+        <script src="../dist/reveal.js"></script>
+        <script src="../dist/plugin/markdown.js"></script>
+        <script src="../dist/plugin/highlight.js"></script>
+        <script src="../dist/plugin/notes.js"></script>
+        <script src="../dist/plugin/math.js"></script>
 
-				plugins: [RevealMarkdown, RevealHighlight, RevealNotes, RevealMath.KaTeX],
-			});
-		</script>
-	</body>
+        <script>
+            Reveal.initialize({
+                controls: true,
+                progress: true,
+                history: true,
+                center: false,
+                maxScale: 1,
+                markdown: {
+                    smartypants: true,
+                },
+
+                plugins: [RevealMarkdown, RevealHighlight, RevealNotes, RevealMath.KaTeX],
+            });
+        </script>
+    </body>
 </html>
