@@ -856,6 +856,8 @@
 
                         <h2>Policy Gradient Methods</h2>
                         $$J(\theta) = \mathop{\mathbb{E}}_{\tau \sim \pi_{\theta}}[R(\tau)]$$
+                        where
+                        $$R(\tau)=\sum_{t}\gamma^t r_t$$
                         <ul>
                             <li>Our objective is to maximize $J(\theta)$</li>
                             <li>We will do so by fiddling with $\theta$</li>
@@ -871,10 +873,10 @@
                         \mathop{\mathbb{E}}_{x \sim p(x)}[f(x)]=\int f(x)p(x) dx
                         $$
                         We rewrite as...
-                        
                         $$
                         \mathop{ \mathbb{E}}_{ \tau \sim \pi_{\theta}}[R(\tau)] = \int R(\tau) p_{ \theta }(\tau) d\tau
                         $$
+                        Where $p_{\theta}(\tau)$ is the probability of a trajectory $\tau$ under the policy $\pi_{\theta}$ and the environment dynamics.
                     </section>
 
                     <section>
@@ -916,7 +918,7 @@
                         $$
                         \nabla_{\theta} p_{ \theta }(\tau)
                         $$
-                        However, we can be clever and add the following...
+                        We can be clever and add the following...
                         $$
                         \textcolor{red}{p_{\theta}(\tau)}\frac{\nabla_{\theta}p_{ \theta }(\tau)}{\textcolor{red}{p_{\theta}(\tau)}}
                         $$
@@ -1010,6 +1012,20 @@
                         \nabla_{\theta}J(\theta) = \mathop{\mathbb{E}}_{\tau \sim \pi_{\theta}}[R(\tau)\sum_{t}\nabla_{\theta}log(\pi_{\theta}(a_{t}|s_{t}))]
                         $$
                     </section>
+
+                    <section>
+                        <h4>Policy Gradient Methods</h4>
+                        
+                        Now we have a computable gradient
+                        $$
+                        \nabla_{\theta}J(\theta) = \mathop{\mathbb{E}}_{\tau \sim \pi_{\theta}}[R(\tau)\sum_{t}\nabla_{\theta}log(\pi_{\theta}(a_{t}|s_{t}))]
+                        $$
+                        Finally we have what we need to adjust our policy
+                        $$
+                        \theta' \leftarrow \theta + \alpha \nabla_{\theta}J(\theta)
+                        $$
+                    </section>
+
                 </section>
 
                 <section>
@@ -1017,6 +1033,8 @@
                         <script type="text/template">
                             ## How Can We Implement These Ideas?
 
+                            * Slight adjustment to expectation...
+                            * Monte-Carlo Policy Gradient
                         </script>
                     </section>                    
                 </section>
@@ -1024,6 +1042,36 @@
                 <section>
                     <section>
                         <h2>Implementation</h2>
+
+                        In practice this has a problem
+                        $$
+                        \nabla_{\theta}J(\theta) = \mathop{\mathbb{E}}_{\tau \sim \pi_{\theta}}[\textcolor{red}{R(\tau)}\sum_{t}\nabla_{\theta}log(\pi_{\theta}(a_{t}|s_{t}))]
+                        $$
+                        <ul>
+                        <li>This would give all actions in the trajectory equal weight</li>
+                        <li>Instead we should prefer to weigh $a_t$ by only its <i>future rewards</i></li>
+                        <ul>
+                            <li>This preserves causality</li>
+                            <li>Reduces variance</li> 
+                        </ul>
+                        </ul>
+                    </section>
+
+                    <section>
+                        <h4>Implementation</h4>
+
+                        In light of this, we will swap
+                        $$
+                        R(\tau) = \sum_{t}\gamma^t r_t
+                        $$
+                        for
+                        $$
+                        G_t = \sum_{k=t}^{T}\gamma^{t-k} r_{t}
+                        $$
+                        And move $G_t$ inside the sum
+                        $$
+                        \nabla_{\theta}J(\theta) = \mathop{\mathbb{E}}_{\tau \sim \pi_{\theta}}[\sum_{t}\textcolor{red}{G_t}\nabla_{\theta}log(\pi_{\theta}(a_{t}|s_{t}))]
+                        $$
                     </section>
 
                     <section>
