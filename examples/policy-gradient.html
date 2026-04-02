@@ -8,7 +8,7 @@
         <link rel="stylesheet" href="../dist/reveal.css" />
         <link rel="stylesheet" href="../dist/theme/solarized.css" id="theme" />
 
-        <!-- <link rel="stylesheet" href="../dist/plugin/highlight/monokai.css" /> -->
+        <link rel="stylesheet" href="../dist/plugin/highlight/zenburn.css" />
 
         <script name="ui">
             CTX = {}
@@ -1048,8 +1048,8 @@
                         \nabla_{\theta}J(\theta) = \mathop{\mathbb{E}}_{\tau \sim \pi_{\theta}}[\textcolor{red}{R(\tau)}\sum_{t}\nabla_{\theta}log(\pi_{\theta}(a_{t}|s_{t}))]
                         $$
                         <ul>
-                        <li>This would give all actions in the trajectory equal weight</li>
-                        <li>Instead we should prefer to weigh $a_t$ by only its <i>future rewards</i></li>
+                        <li>This weights all actions by the same return $R(\tau)$</li>
+                        <li>Instead weigh $a_t$ by only its <i>future rewards</i></li>
                         <ul>
                             <li>This preserves causality</li>
                             <li>Reduces variance</li> 
@@ -1060,13 +1060,9 @@
                     <section>
                         <h4>Implementation</h4>
 
-                        In light of this, we will swap
+                        In light of this, we will replace $R(\tau)$ with the per-timestep return...
                         $$
-                        R(\tau) = \sum_{t}\gamma^t r_t
-                        $$
-                        for
-                        $$
-                        G_t = \sum_{k=t}^{T}\gamma^{t-k} r_{t}
+                        G_t = \sum_{k=t}^{T}\gamma^{k-t} r_{k}
                         $$
                         And move $G_t$ inside the sum
                         $$
@@ -1075,6 +1071,86 @@
                     </section>
 
                     <section>
+                        <h4>Implementation</h4>
+
+                        We still need a concrete way to compute our expecation. Enter Monte Carlo approximation
+                        $$\mathop{\mathbb{E}}[X] \approx \frac{1}{N}\sum_{n}^{N}x_n$$
+                        <ul>
+                            <li>Simple average</li>
+                            <li>Approximates an expectation by drawing samples</li>
+                            <li>We can do this through trials of environment interaction</li>
+                        </ul>
+                    </section>
+
+                    <section>
+                        <h4>Implementation</h4>
+
+                        This allows for
+                        $$
+                        \nabla_{\theta}J(\theta) = \mathop{\mathbb{E}}_{\tau \sim \pi_{\theta}}[\sum_{t=0}G_t\nabla_{\theta}log(\pi_{\theta}(a_{t}|s_{t}))] 
+                        $$
+                        to become
+                        $$
+                        \nabla_{\theta}J(\theta) \approx \frac{1}{N}\sum_{n}^{N}\sum_{t}^{T^n}{G_t^n}\nabla_{\theta}log(\pi_{\theta}(a_{t}^n|s_{t}^n))
+                        $$
+                        Where $N$ is the number of trials (trajectories) sampled. Super script $n$ on quantities indicate which trajectory they belong to. 
+                    </section>
+
+                    <section>
+                        <h4>Implementation</h4>
+
+                        Example implementation.
+
+                        <pre><code data-trim data-line-numbers data-noescape class="language-javascript">
+function run_trials_and_optimize(env, theta, trials) {
+    // accumulator for policy gradient
+    let grad_theta = theta * 0;
+
+    for (let n = 0; n < trials; n++) {
+        let tau = [];
+
+        // set initial state of environment
+        let s_t = env.reset();
+        
+        // Sample the trajectory
+        for (let t = 0; t < 100; t++) {
+            const a_t = sample(pi_theta(theta, s_t));
+            const [s_t1, r_t] = env.step(a_t);
+
+            if (r_t == null) { break; }
+
+            tau.push([s_t, a_t, r_t])
+
+            s_t = s_t1;
+        }
+
+        for (let t = 0; t < tau.length; t++) {
+            const [s_t, a_t, r_t] = tau[t];
+
+            // Compute per-timestep return
+            const gamma = 0.99; 
+            let G_t = 0;
+            for (let k = t; k < tau.length; k++) {
+                const [s_k, a_k, r_k] = tau[k];
+                G_t += gamma**(k - t) * r_k;
+            }
+
+            // accumulate the gradient
+            grad_theta += G_t * grad_theta_log_pi_theta(theta, a_t, s_t);
+        }
+    }
+
+    grad_theta /= trials; // Average by trial count
+
+    // take a step in the direction of the gradient
+    const alpha = 0.01;
+    return theta + alpha * grad_theta;
+}
+                        </code></pre>
+                    </section>
+
+                    <section>
+                          
                         <ul>
                             <li>_TODO: visualization of _</li>
                         </ul>
