@@ -630,6 +630,7 @@
             let puck = {
                 w: 100,
                 h: 100,
+                step_size: 2,
                 trained_theta: [
                     [-1.6444115320689505,0.021795737101024754,7.672526286799822,0.9591618796584944,0.9640574493093667,0.37190740571536984,-9.267062471062628,-0.06407801823466809],
                     [-14.37736904759986,-1.6625368061444634,0.6048394331504615,1.710708142767999,13.20524986967369,2.658182087839272,1.0267505020942052,-2.642245026974941],
@@ -690,8 +691,9 @@
 
                     return x_0;
                 },
-                sample_trajectory: function(theta, left_top, right_bottom, randomize_target) {
-                    let x_t = puck.initial_state(left_top, right_bottom, randomize_target);
+                sample_trajectory: function(theta, left_top, right_bottom, randomize_target, opts) {
+                    opts = opts || {};
+                    let x_t = opts.initial_x ? [...opts.initial_x] : puck.initial_state(left_top, right_bottom, randomize_target);
 
                     let T = { X: [], A_pr: [], A: [], R: [], G: []};
 
@@ -745,8 +747,9 @@
                 {
                     let x_t1 = zeros(4, 1);
 
-                    let s = 2;
-                    let d = s/Math.sqrt(s*s+s*s);
+                    let s = puck.step_size;
+                    let d = s * (s/Math.sqrt(s*s+s*s));
+
                     let deltas = [
                         [ 0, -s],
                         [ d, -d],
@@ -774,8 +777,9 @@
                     T.A.push(a_t.idx);
                     return r_t;
                 },
-                draw: function(cvsId, time, trajectory, left_top, right_bottom)
+                draw: function(cvsId, time, trajectory, left_top, right_bottom, opts)
                 {
+                    opts = opts || {};
                     const e = document.getElementById(cvsId);
                     const ctx = ctx_cache(e);
                     const dpr = window.devicePixelRatio || 1;
@@ -803,17 +807,35 @@
                     ctx.stroke();
 
                     // draw path
-                    ctx.beginPath();
-                    ctx.setLineDash([5, 15]);
-                    ctx.strokeStyle = color('LightGray');
-                    let x = trajectory.X[0];
-                    ctx.moveTo(x[0], x[1]);
-                    for (let t = 1; t < time; t++) {
-                        x = trajectory.X[t];
-                        ctx.lineTo(x[0], x[1]);
+                    if (opts.reward_colors && trajectory.R && trajectory.R.length > 0) {
+                        let norm_ref = puck.step_size;
+                        ctx.setLineDash([]);
+                        for (let t = 1; t <= time; t++) {
+                            let x0 = trajectory.X[t-1];
+                            let x1 = trajectory.X[t];
+                            let r = trajectory.R[t];
+                            let intensity = Math.min(1, Math.abs(r) / norm_ref);
+                            let lo = 80, hi = 220;
+                            let v = Math.round(lo + (hi - lo) * intensity);
+                            ctx.strokeStyle = r >= 0 ? `rgb(0,${v},0)` : `rgb(${v},0,0)`;
+                            ctx.beginPath();
+                            ctx.moveTo(x0[0], x0[1]);
+                            ctx.lineTo(x1[0], x1[1]);
+                            ctx.stroke();
+                        }
+                    } else {
+                        ctx.beginPath();
+                        ctx.setLineDash([5, 15]);
+                        ctx.strokeStyle = color('LightGray');
+                        let x = trajectory.X[0];
+                        ctx.moveTo(x[0], x[1]);
+                        for (let t = 1; t < time; t++) {
+                            x = trajectory.X[t];
+                            ctx.lineTo(x[0], x[1]);
+                        }
+                        ctx.setLineDash([]);
+                        ctx.stroke();
                     }
-                    ctx.setLineDash([]);
-                    ctx.stroke();
 
                     // draw puck
                     ctx.beginPath();
@@ -932,8 +954,45 @@
                         </script>
                     </section>
 
-                    <section>
-                            _TODO: visualization of state transitions occuring_
+                    <section style="height:100%">
+                        <h4>Environment — State Transitions</h4>
+                        <canvas id="state-transitions" class="r-stretch"></canvas>
+                        <script type="text/javascript">
+                            (function() {
+                                const ST_STEP_SIZE = 15;
+                                const ST_FPS = 2;
+                                let st_rand_theta = randmat(3, 8);
+                                let st_cvs = document.getElementById("state-transitions");
+                                let st_T = null;
+                                let st_t = 0;
+
+                                let st_spawn = null;
+                                function st_sample() {
+                                    let w = st_cvs.clientWidth, h = st_cvs.clientHeight;
+                                    if (!st_spawn) {
+                                        st_spawn = [w * 0.15, h * 0.15, w * 0.5, h * 0.5];
+                                    }
+                                    let prev = puck.step_size;
+                                    puck.step_size = ST_STEP_SIZE;
+                                    st_T = puck.sample_trajectory(st_rand_theta, [0,0], [w, h], false, {initial_x: st_spawn});
+                                    puck.step_size = prev;
+                                }
+
+                                when_visible("state-transitions", (visible) => {
+                                    if (visible && st_T === null) { st_sample(); }
+                                    animate("state-transitions", 1000 / ST_FPS).using(() => {
+                                        if (!st_T) return;
+                                        clear("state-transitions");
+                                        puck.draw("state-transitions", st_t, st_T, null, null, {reward_colors: true});
+                                        st_t++;
+                                        if (st_t >= st_T.X.length) {
+                                            st_sample();
+                                            st_t = 0;
+                                        }
+                                    }).when(visible);
+                                });
+                            })();
+                        </script>
                     </section>
                 </section>
 
@@ -978,12 +1037,156 @@
                             $$a_t \sim \pi_{\theta}(.|s_t)$$
                         </script>
                     </section>
-                    <section>
-                        <ul>
-                            <li>_TODO: visualization of policy probability distribution for different states_</li>
-                            <li>_TODO: visualization of box of action classes_</li>
-                            <li>_TODO: visualization of sampling occuring_</li>
-                        </ul>
+                    <section style="height:100%">
+                        <h4>Policy — $\pi_\theta(a|s)$</h4>
+                        <div style="display:grid; grid-template-columns:55% 45%; gap:8px; height:calc(100% - 3em);">
+                            <canvas id="slide-pol-puck" class="no-scroll" style="width:100%; height:100%; touch-action:none;"></canvas>
+                            <canvas id="slide-pol-sampling" style="width:100%; height:100%;"></canvas>
+                        </div>
+                        <script type="text/javascript">
+                            (function() {
+                                // unit direction vectors matching step2's deltas order
+                                const DIRS = [
+                                    [ 0, -1], [ 1, -1], [ 1,  0], [ 1,  1],
+                                    [ 0,  1], [-1,  1], [-1,  0], [-1, -1]
+                                ].map(([x, y]) => { let m = Math.sqrt(x*x+y*y); return [x/m, y/m]; });
+                                const DIR_LABELS = ['↑','↗','→','↘','↓','↙','←','↖'];
+                                const MAX_ARROW = 55;
+
+                                let pol_x = null;
+                                let pol_pr = Array(8).fill(1/8);
+                                let last_pr0 = pol_pr[0];
+                                let pol_hist = Array(8).fill(0);
+                                let last_sampled = -1;
+
+                                function draw_puck_canvas() {
+                                    if (!pol_x) return;
+                                    clear("slide-pol-puck");
+                                    let ctx = ctx_cache("slide-pol-puck");
+
+                                    // target
+                                    ctx.strokeStyle = color('black');
+                                    ctx.beginPath();
+                                    ctx.moveTo(pol_x[2]-5, pol_x[3]-5); ctx.lineTo(pol_x[2]+5, pol_x[3]+5);
+                                    ctx.moveTo(pol_x[2]-5, pol_x[3]+5); ctx.lineTo(pol_x[2]+5, pol_x[3]-5);
+                                    ctx.stroke();
+
+                                    // direction lines proportional to probability
+                                    for (let i = 0; i < 8; i++) {
+                                        let len = MAX_ARROW * pol_pr[i];
+                                        let ex = pol_x[0] + DIRS[i][0] * len;
+                                        let ey = pol_x[1] + DIRS[i][1] * len;
+                                        if (i === last_sampled) {
+                                            ctx.save();
+                                            ctx.strokeStyle = color('black');
+                                            ctx.lineWidth = 3;
+                                            line(ctx, pol_x[0], pol_x[1], ex, ey);
+                                            ctx.beginPath();
+                                            ctx.arc(ex, ey, 3, 0, 2 * Math.PI);
+                                            ctx.stroke();
+                                            ctx.restore();
+                                        } else {
+                                            ctx.strokeStyle = color('black');
+                                            line(ctx, pol_x[0], pol_x[1], ex, ey);
+                                        }
+                                    }
+
+                                    // puck
+                                    ctx.strokeStyle = color('black');
+                                    ctx.beginPath();
+                                    ctx.arc(pol_x[0], pol_x[1], 4, 0, 2 * Math.PI);
+                                    ctx.stroke();
+
+                                    text("slide-pol-puck", "try me!", [32, 32], {angle: -Math.PI / 4});
+                                }
+
+                                function on_mouse(e) {
+                                    if (!pol_x) return;
+                                    let cvs = document.getElementById("slide-pol-puck");
+                                    if (e.type === "mousemove") {
+                                        pol_x[0] = e.offsetX; pol_x[1] = e.offsetY;
+                                    } else if (e.type === "touchmove") {
+                                        e.preventDefault();
+                                        let r = cvs.getBoundingClientRect();
+                                        pol_x[0] = e.touches[0].clientX - r.left;
+                                        pol_x[1] = e.touches[0].clientY - r.top;
+                                    }
+                                    pol_pr = puck.pi2(puck.trained_theta, pol_x).pr[0];
+                                    draw_puck_canvas();
+                                }
+
+                                // sampling animation — mirrors sample_multinomial from article
+                                animate_when_visible({id: "slide-pol-sampling", fps: 10}, () => {
+                                    if (pol_pr[0] !== last_pr0) {
+                                        last_pr0 = pol_pr[0];
+                                        pol_hist = Array(8).fill(0);
+                                        clear("slide-pol-sampling");
+                                    }
+
+                                    const dpr = window.devicePixelRatio || 1;
+                                    let ctx = ctx_cache("slide-pol-sampling");
+                                    let w = ctx.canvas.width / dpr, h = ctx.canvas.height / dpr;
+
+                                    let cdf = { left: 8, top: 28, right: w/2 - 8, bottom: h - 28 };
+                                    let his = { left: w/2 + 8, top: 28, right: w - 8, bottom: h - 28 };
+                                    let fw = (f) => f.right - f.left;
+                                    let fh = (f) => f.bottom - f.top;
+
+                                    let should_draw = pol_hist.reduce((a,b) => a+b) === 0 || ctx.wants_redraw;
+                                    ctx.strokeStyle = color('black');
+                                    if (should_draw) ctx.strokeRect(cdf.left, cdf.top, fw(cdf), fh(cdf));
+
+                                    // sample one action, accumulate, draw dot in CDF
+                                    let r = Math.random(), rh = Math.random(), c = 0, x = cdf.left;
+                                    for (let i = 0; i < 8; i++) {
+                                        let pr = pol_pr[i];
+                                        c += pr;
+                                        if (r < c) { pol_hist[i]++; last_sampled = i; c = -10; }
+                                        let lx = x;
+                                        x += fw(cdf) * pr;
+                                        if (should_draw) {
+                                            ctx.strokeStyle = color('black');
+                                            if (i < 7) line(ctx, x, cdf.top, x, cdf.bottom);
+                                            let label_y = i % 2 === 0 ? cdf.top - 10 : cdf.bottom + 16;
+                                            text("slide-pol-sampling", DIR_LABELS[i], [lx + (x-lx)/2, label_y], {align: 'center'});
+                                        }
+                                    }
+                                    ctx.strokeStyle = color('LightGray');
+                                    ctx.beginPath();
+                                    ctx.arc(r * fw(cdf) + cdf.left, cdf.top + fh(cdf) * rh, 0.5, 0, 2 * Math.PI);
+                                    ctx.stroke();
+
+                                    // histogram
+                                    ctx.clearRect(his.left, his.top, fw(his), fh(his) + 30);
+                                    let max_h = Math.max(100, ...pol_hist);
+                                    let bw = fw(his) / 8;
+                                    for (let i = 0; i < 8; i++) {
+                                        let frac = pol_hist[i] / max_h;
+                                        let bx = his.left + bw * i;
+                                        let by = his.bottom - fh(his) * frac;
+                                        ctx.strokeStyle = color('black');
+                                        ctx.strokeRect(bx + 2, by, bw - 4, fh(his) * frac);
+                                        text("slide-pol-sampling", DIR_LABELS[i], [bx + bw/2, his.bottom + 15], {align: 'center'});
+                                        if (fh(his) * frac > 20) {
+                                            text("slide-pol-sampling", pol_hist[i], [bx + bw/2, by + fh(his)*frac/2 + 8], {align: 'center'});
+                                        }
+                                    }
+                                    draw_puck_canvas();
+                                });
+
+                                let pol_cvs = document.getElementById("slide-pol-puck");
+                                pol_cvs.addEventListener("mousemove", on_mouse);
+                                pol_cvs.addEventListener("touchmove", on_mouse, {passive: false});
+
+                                when_visible("slide-pol-puck", (visible) => {
+                                    if (visible && pol_x === null) {
+                                        pol_x = puck.initial_state([0,0], [pol_cvs.clientWidth, pol_cvs.clientHeight], false);
+                                        pol_pr = puck.pi2(puck.trained_theta, pol_x).pr[0];
+                                        draw_puck_canvas();
+                                    }
+                                });
+                            })();
+                        </script>
                     </section>
                 </section>
 
@@ -1291,9 +1494,59 @@
                 </section>
 
                 <section>
-                    <section>
+                    <section style="height:100%">
                         <h2>Q&A</h2>
+                        <canvas id="slide-training" class="r-stretch"></canvas>
+                        <small>Average reward per 10 epochs</small>
+                        <canvas id="slide-training-reward" style="width:100%; height:5em;"></canvas>
+                        <script type="text/javascript">
+                            (function() {
+                                let train_t = 0;
+                                let train_R = [];
+                                let train_theta = [
+                                    [-0.06344286448017344, -0.013060742152890104, 0.3612000714595811, -0.265469954891274, -0.25405646928285, -0.265469954891274, -0.25405646928285, -0.2317468792603885],
+                                    [-0.32516165515685724, -0.03432296246933131, 0.383052435694907, 0.2915076462546815, 0.046673970000944864, 0.2915076462546815, 0.046673970000944864, -0.17635189577351218],
+                                    [-0.32516165515685724, -0.03432296246933131, 0.383052435694907, 0.2915076462546815, 0.046673970000944864, 0.2915076462546815, 0.046673970000944864, -0.17635189577351218]
+                                ];
 
+                                let train_ele = document.getElementById("slide-training");
+                                let train_T = null;
+
+                                draw_reward_plot("slide-training-reward", train_R);
+
+                                animate_when_visible({id: "slide-training", fps: 60}, () => {
+                                    if (train_T === null) {
+                                        train_T = puck.sample_trajectory(train_theta, [0,0], [train_ele.clientWidth, train_ele.clientHeight], true);
+                                    }
+
+                                    train_t++;
+
+                                    if (train_t >= train_T.X.length) {
+                                        let avg_ret = 0;
+                                        const epochs = 12 * 10;
+                                        for (let e = 0; e < epochs; e++) {
+                                            train_T = puck.sample_trajectory(train_theta);
+                                            train_theta = optimize(puck.pi2, train_theta, train_T, {
+                                                alpha: 0.05 * Math.pow(0.92, train_R.length)
+                                            });
+                                            avg_ret += train_T.R.reduce((acc, val) => acc + val, 0);
+                                        }
+                                        train_R.push(avg_ret / epochs);
+
+                                        if (train_R.length % 20 === 0) {
+                                            train_t = 0;
+                                            train_T = puck.sample_trajectory(train_theta, [0,0], [train_ele.clientWidth, train_ele.clientHeight], true);
+                                        }
+
+                                        clear("slide-training-reward");
+                                        draw_reward_plot("slide-training-reward", train_R);
+                                    } else {
+                                        clear("slide-training");
+                                        puck.draw("slide-training", train_t, train_T);
+                                    }
+                                });
+                            })();
+                        </script>
                     </section>
                 </section>
             </div>
