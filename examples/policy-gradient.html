@@ -371,6 +371,22 @@
                 return b;
             }
 
+			function vecdot(a, b)
+			{
+				if (a.length != b.length) { throw "Vector dimensions do not match"; }
+
+				let d = 0;
+				for (let i = 0; i < a.length; i++) {
+					d += a[i] * b[i];
+				}
+				return d;
+			}
+
+			function vecmag(a)
+			{
+				return Math.sqrt(vecdot(a, a));
+			}
+
             function randmat(rows, cols)
             {
                 let A = [];
@@ -490,6 +506,40 @@
                 }
                 return grad;
             }
+
+			function policy_grad(pi, theta, traj, params)
+			{
+				params = params || {};	
+				params.alpha = params.alpha == undefined ? 0.1 : params.alpha;
+				params.h = params.h || 0.001;
+				params.gamma = params.gamma || 0.99;
+
+				let grad_log_pi = zeros(rows(theta), cols(theta));
+
+				// Compute baseline: mean reward-to-go across all timesteps and trajectories
+				let baseline = 0;
+				let total_steps = 0;
+				for (let t = 0; t < traj.G.length; t++) {
+					baseline += traj.G[t];
+					total_steps++;
+				}
+				baseline = total_steps > 0 ? baseline / total_steps : 0;
+
+				for (let t = 0; t < traj.X.length; t++) {
+					let x_t = traj.X[t];
+					let a_t = traj.A[t];
+					let grad_log_pi_t = policy_grad_analytical(pi, theta, x_t, a_t, params.h);
+
+					let G_t = 0;
+					for (let k = t; k < traj.X.length; k++) {
+						G_t += Math.pow(0.9, k - t) * traj.R[k];
+					}
+
+					grad_log_pi = matadd(grad_log_pi, matscl(grad_log_pi_t, G_t - baseline));
+				}
+
+				return grad_log_pi;	
+			}
 
             function optimize(pi, theta, T, params)
             {
@@ -631,18 +681,18 @@
                 w: 100,
                 h: 100,
                 step_size: 2,
-                trained_theta: [
-                    [-1.6444115320689505,0.021795737101024754,7.672526286799822,0.9591618796584944,0.9640574493093667,0.37190740571536984,-9.267062471062628,-0.06407801823466809],
-                    [-14.37736904759986,-1.6625368061444634,0.6048394331504615,1.710708142767999,13.20524986967369,2.658182087839272,1.0267505020942052,-2.642245026974941],
-                    [-1.6432557446971103,-1.3735460226777347,1.3469846169513608,0.2544682007861506,0.10707547104622923,-0.2833470653057629,2.323859360930679,-0.20865966222734209]
-                ],
+                set_step_size: function(s) {
+                	this.step_size = s;
+                	this.deltas = null;
+                },
+                trained_theta: [[8.66745740506822,5.996406710365718,-0.15365873881940448,-6.311126006483258,-8.81864980406707,-6.359052573470944,-0.08042535100680422,6.072945095631422],[0.08889004751905238,6.09754307857545,8.8735708505469,6.268372669526972,0.07562654356798991,-6.035568669418457,-8.716570151762186,-6.128285213749267]],
                 phi: function(x) {
                     let dx = x[2] - x[0];
                     let dy = x[3] - x[1];
                     let mag = Math.sqrt(dx * dx + dy * dy) + 0.1;
                     let s = 1/mag;
                     // let nx = dx/mag, ny = dy/mag;
-                    return [dx * s, dy * s, 1]; //, 1 - Math.abs(nx), 1 - Math.abs(ny)];
+                    return [dx * s, dy * s];//, 1]; //, 1 - Math.abs(nx), 1 - Math.abs(ny)];
                     // return [dx * 0.1, dy * 0.1, 1];
                 },
                 pi: function(theta, x) {
@@ -669,28 +719,34 @@
                 
                     return { pr: [pr], idx: [a_idx] };
                 },
-                dist_to_target: function(x) {
-                    return dist([x[0],x[1]], [x[2], x[3]]);
-                },
-                initial_state: function(left_top, right_bottom, randomize_target) {
-                    left_top = left_top || [0, 0];
-                    right_bottom = right_bottom || [500, 500];
-                    let r = Math.random;
-                    let w = right_bottom[0] - left_top[0];
-                    let h = right_bottom[1] - left_top[1];
-                    let o_x = left_top[0], o_y = left_top[1];
-                    // in the background, trajectories could be sampled this way so there isn't an axial bias built into
-                    // the optimized policy. But for visualization purposes, the puck and targets could be spawned anywhere
-                    let targ_x = randomize_target ? r() * w : w / 2;
-                    let targ_y = randomize_target ? r() * h : h / 2; 
-                    let x_0 = [o_x + r() * w, o_y + r() * h, o_x + targ_x, o_y + targ_y];
+				dist_to_target: function(x) {
+					return dist([x[0],x[1]], [x[2], x[3]]);
+				},
+				initial_state: function(left_top, right_bottom, randomize_target) {
+					left_top = left_top || [0, 0];
+					right_bottom = right_bottom || [500, 500];
+					let r = Math.random;
+					let w = right_bottom[0] - left_top[0];
+					let h = right_bottom[1] - left_top[1];
+					let o_x = left_top[0], o_y = left_top[1];
+					// in the background, trajectories could be sampled this way so there isn't an axial bias built into
+					// the optimized policy. But for visualization purposes, the puck and targets could be spawned anywhere
+					let targ_x = randomize_target ? r() * w : w / 2;
+					let targ_y = randomize_target ? r() * h : h / 2;
+					let x_0 = [o_x + r() * w, o_y + r() * h, o_x + targ_x, o_y + targ_y];
 
-                    for(let i = 0; i < 10 && puck.dist_to_target(x_0) <= 10; i++) {
-                        x_0 = [o_x + r() * w, o_y + r() * h, o_x + targ_x, o_y + targ_y];
-                    }
+					if (!randomize_target) {
+						let rad = 10 + r() * 100;
+						let t = r() * 2 * Math.PI;
+						x_0 = [o_x + targ_x + Math.cos(t) * rad, o_y + targ_y + Math.sin(t) * rad, o_x + targ_x, o_y + targ_y];
+					}
 
-                    return x_0;
-                },
+					for(let i = 0; i < 10 && puck.dist_to_target(x_0) <= 10; i++) {
+						x_0 = [o_x + r() * w, o_y + r() * h, o_x + targ_x, o_y + targ_y];
+					}
+
+					return x_0;
+				},
                 sample_trajectory: function(theta, left_top, right_bottom, randomize_target, opts) {
                     opts = opts || {};
                     let x_t = opts.initial_x ? [...opts.initial_x] : puck.initial_state(left_top, right_bottom, randomize_target);
@@ -716,13 +772,23 @@
 
                     return T;
                 },
-                reward: function(x_t, x_t1)
-                {
-                    let d0 = puck.dist_to_target(x_t);
-                    let d1 = puck.dist_to_target(x_t1);
-                    
-                    return d0 - d1;
-                },
+				reward: function(x_t, x_t1)
+				{
+					var move = [x_t1[0]-x_t[0], x_t1[1]-x_t[1]];
+					let move_mag = vecmag(move);
+					move = vecscl(move, 1/move_mag);
+
+					var to_target = [x_t1[2]-x_t1[0], x_t1[3]-x_t1[1]];
+					let to_target_mag = vecmag(to_target);
+					to_target = vecscl(to_target, 1/(Math.max(to_target_mag,0.001)));
+
+					let alignment = Math.pow(vecdot(move, to_target), 64);
+
+					let d0 = puck.dist_to_target(x_t);
+					let d1 = puck.dist_to_target(x_t1);
+					
+					return (d0 - d1) * alignment;
+				},
                 step: function(T, x_t, a_t, gamma)
                 {
                     let x_t1 = zeros(4, 1);
@@ -748,21 +814,16 @@
                     let x_t1 = zeros(4, 1);
 
                     let s = puck.step_size;
-                    let d = s * (s/Math.sqrt(s*s+s*s));
+					if (!puck.deltas) {
+						puck.deltas = [];
+						for (let i = 0; i < 8; i++) {
+							let t = (i / 8) * Math.PI*2;
+							puck.deltas.push([Math.cos(t) * s, Math.sin(t) * s]);
+						}
+					}
 
-                    let deltas = [
-                        [ 0, -s],
-                        [ d, -d],
-                        [ s,  0],
-                        [ d,  d],
-                        [ 0,  s],
-                        [-d,  d],
-                        [-s,  0],
-                        [-d, -d],
-                    ];
-
-                    x_t1[0] = x_t[0] + deltas[a_t.idx[0]][0];
-                    x_t1[1] = x_t[1] + deltas[a_t.idx[0]][1];
+                    x_t1[0] = x_t[0] + puck.deltas[a_t.idx[0]][0];
+                    x_t1[1] = x_t[1] + puck.deltas[a_t.idx[0]][1];
                     x_t1[2] = x_t[2];
                     x_t1[3] = x_t[3];
 
@@ -923,13 +984,12 @@
 
                         An MDP is defined by the tuple:
 
-                        $$(\mathcal{S}, \mathcal{A}, P, R, \gamma)$$
+                        $$(\mathcal{S}, \mathcal{A}, P, R)$$
 
                         * $\mathcal{S}$: state space  
                         * $\mathcal{A}$: action space  
                         * $P(\cdot \mid s,a)$: transition dynamics  
                         * $R(s,a)$: expected reward  
-                        * $\gamma \in [0,1]$: discount factor
                         ---
                         ## Environment
                         #### Transition Dynamics
@@ -961,7 +1021,7 @@
                             (function() {
                                 const ST_STEP_SIZE = 15;
                                 const ST_FPS = 2;
-                                let st_rand_theta = randmat(3, 8);
+                                let st_rand_theta = randmat(2, 8);
                                 let st_cvs = document.getElementById("state-transitions");
                                 let st_T = null;
                                 let st_t = 0;
@@ -973,9 +1033,9 @@
                                         st_spawn = [w * 0.15, h * 0.15, w * 0.5, h * 0.5];
                                     }
                                     let prev = puck.step_size;
-                                    puck.step_size = ST_STEP_SIZE;
+                                    puck.set_step_size(ST_STEP_SIZE);
                                     st_T = puck.sample_trajectory(st_rand_theta, [0,0], [w, h], false, {initial_x: st_spawn});
-                                    puck.step_size = prev;
+                                    puck.set_step_size(prev);
                                 }
 
                                 when_visible("state-transitions", (visible) => {
@@ -999,29 +1059,17 @@
                 <section>
                     <section data-markdown>
                         <script type="text/template">
-                            ## What are Policy Gradient Methods?
-                            
-                            * Elegant solution to the RL problem
-                            * No knowledge of environment dynamics
-                            * No estimation of a value function
-                            * Seeks to directly optimize the agent's _POLICY_
-                        </script>
-                    </section>
-                </section>
-
-                <section>
-                    <section data-markdown>
-                        <script type="text/template">
                             ## Policy
                             $\pi_\theta(a|s)$
                             * The core of an RL agent
                             * Function which maps state $s$ to action $a$
+                            	* Deterministic or stochastic
                             * Mapping of $s$ to $a$ is defined by parameters $\theta$
                             * Can be defined for discrete or continous state and action spaces
                             ---
                             ## Policy
                             $\pi_\theta(a|s)$
-                            * In our case...
+                            * In our examples...
                                 * The state space is continuous
                                 * The action space is discrete
                                 * The policy is a probability distribution
@@ -1031,26 +1079,23 @@
                             ## Policy
                             $$z = \theta\phi(s)$$
                             $\phi$ is a function that extracts features from $s$
-                            $$\pi_\theta(a|s) = \frac{e^{z_{a}}}{\sum_{i}e^{z_{i}}}$$
+                            $$\pi_\theta(.|s) = \frac{e^{z}}{\sum_{i}e^{z_{i}}}$$
                             We can choose a specific action as...
 
                             $$a_t \sim \pi_{\theta}(.|s_t)$$
                         </script>
                     </section>
                     <section style="height:100%">
-                        <h4>Policy — $\pi_\theta(a|s)$</h4>
+                        <h4>Policy — $\pi_\theta(.|s)$</h4>
                         <div style="display:grid; grid-template-columns:55% 45%; gap:8px; height:calc(100% - 3em);">
                             <canvas id="slide-pol-puck" class="no-scroll" style="width:100%; height:100%; touch-action:none;"></canvas>
-                            <canvas id="slide-pol-sampling" style="width:100%; height:100%;"></canvas>
+                            <canvas id="slide-pol-sampling" style="width:100%; height:50%;"></canvas>
                         </div>
                         <script type="text/javascript">
                             (function() {
                                 // unit direction vectors matching step2's deltas order
-                                const DIRS = [
-                                    [ 0, -1], [ 1, -1], [ 1,  0], [ 1,  1],
-                                    [ 0,  1], [-1,  1], [-1,  0], [-1, -1]
-                                ].map(([x, y]) => { let m = Math.sqrt(x*x+y*y); return [x/m, y/m]; });
-                                const DIR_LABELS = ['↑','↗','→','↘','↓','↙','←','↖'];
+                                // const DIR_LABELS = ['↑','↗','→','↘','↓','↙','←','↖'];
+                                const DIR_LABELS = ['→','↘','↓','↙','←','↖','↑','↗'];
                                 const MAX_ARROW = 55;
 
                                 let pol_x = null;
@@ -1074,20 +1119,19 @@
                                     // direction lines proportional to probability
                                     for (let i = 0; i < 8; i++) {
                                         let len = MAX_ARROW * pol_pr[i];
-                                        let ex = pol_x[0] + DIRS[i][0] * len;
-                                        let ey = pol_x[1] + DIRS[i][1] * len;
+                                        let ex = pol_x[0] + puck.deltas[i][0] * (len + 10);
+                                        let ey = pol_x[1] + puck.deltas[i][1] * (len + 10);
+                                        let offx = pol_x[0] + puck.deltas[i][0] * 10;
+                                        let offy = pol_x[1] + puck.deltas[i][1] * 10;
                                         if (i === last_sampled) {
                                             ctx.save();
                                             ctx.strokeStyle = color('black');
                                             ctx.lineWidth = 3;
-                                            line(ctx, pol_x[0], pol_x[1], ex, ey);
-                                            ctx.beginPath();
-                                            ctx.arc(ex, ey, 3, 0, 2 * Math.PI);
-                                            ctx.stroke();
+                                            line(ctx, offx, offy, ex, ey);
                                             ctx.restore();
                                         } else {
                                             ctx.strokeStyle = color('black');
-                                            line(ctx, pol_x[0], pol_x[1], ex, ey);
+                                            line(ctx, offx, offy, ex, ey);
                                         }
                                     }
 
@@ -1096,8 +1140,6 @@
                                     ctx.beginPath();
                                     ctx.arc(pol_x[0], pol_x[1], 4, 0, 2 * Math.PI);
                                     ctx.stroke();
-
-                                    text("slide-pol-puck", "try me!", [32, 32], {angle: -Math.PI / 4});
                                 }
 
                                 function on_mouse(e) {
@@ -1143,12 +1185,16 @@
                                         c += pr;
                                         if (r < c) { pol_hist[i]++; last_sampled = i; c = -10; }
                                         let lx = x;
-                                        x += fw(cdf) * pr;
+                                        let bin_width = fw(cdf) * pr;
+                                        x += bin_width;
                                         if (should_draw) {
                                             ctx.strokeStyle = color('black');
                                             if (i < 7) line(ctx, x, cdf.top, x, cdf.bottom);
                                             let label_y = i % 2 === 0 ? cdf.top - 10 : cdf.bottom + 16;
-                                            text("slide-pol-sampling", DIR_LABELS[i], [lx + (x-lx)/2, label_y], {align: 'center'});
+
+                                            if (bin_width > 10) {
+                                            	text("slide-pol-sampling", DIR_LABELS[i], [lx + (x-lx)/2, label_y], {align: 'center'});                                            	
+                                            }
                                         }
                                     }
                                     ctx.strokeStyle = color('LightGray');
@@ -1191,6 +1237,17 @@
                 </section>
 
                 <section>
+                    <section data-markdown>
+                        <script type="text/template">
+                            ## What are Policy Gradient Methods?
+                            
+                            * Elegant solution to the RL problem
+                            * No knowledge of environment dynamics
+                            * No estimation of a value function
+                            * Seeks to directly optimize the agent's _POLICY_
+                        </script>
+                    </section>
+
                     <section>
 
                         <h2>Policy Gradient Methods</h2>
@@ -1497,53 +1554,79 @@
                     <section style="height:100%">
                         <h2>Q&A</h2>
                         <canvas id="slide-training" class="r-stretch"></canvas>
-                        <small>Average reward per 10 epochs</small>
+                        <small>Average reward</small>
                         <canvas id="slide-training-reward" style="width:100%; height:5em;"></canvas>
                         <script type="text/javascript">
                             (function() {
-                                let train_t = 0;
-                                let train_R = [];
+                                let train_ele = document.getElementById("slide-training");
                                 let train_theta = [
                                     [-0.06344286448017344, -0.013060742152890104, 0.3612000714595811, -0.265469954891274, -0.25405646928285, -0.265469954891274, -0.25405646928285, -0.2317468792603885],
-                                    [-0.32516165515685724, -0.03432296246933131, 0.383052435694907, 0.2915076462546815, 0.046673970000944864, 0.2915076462546815, 0.046673970000944864, -0.17635189577351218],
                                     [-0.32516165515685724, -0.03432296246933131, 0.383052435694907, 0.2915076462546815, 0.046673970000944864, 0.2915076462546815, 0.046673970000944864, -0.17635189577351218]
                                 ];
-
-                                let train_ele = document.getElementById("slide-training");
-                                let train_T = null;
+                                let train_t = 0;
+								let train_T = puck.sample_trajectory(train_theta, [0,0], [train_ele.clientWidth, train_ele.clientHeight], true);
+								let train_R = []
+								let grad_log_pi = {
+								    epochs: 10,
+								    accumulator: null,
+								    avg_ret: 0,
+								    samples: 0,
+								    reset: function() {
+								        this.accumulator = null;
+								        this.samples = 0;
+								        this.avg_ret = 0;
+								    }
+								};
 
                                 draw_reward_plot("slide-training-reward", train_R);
 
                                 animate_when_visible({id: "slide-training", fps: 60}, () => {
-                                    if (train_T === null) {
-                                        train_T = puck.sample_trajectory(train_theta, [0,0], [train_ele.clientWidth, train_ele.clientHeight], true);
-                                    }
+								    train_t++;
 
-                                    train_t++;
+								    // Take some traj samples, few enough to preserve frame-rate
+								    let start = performance.now();
+								    for (let e = 0; e < grad_log_pi.epochs; e++) {
+								        traj = puck.sample_trajectory(train_theta);
 
-                                    if (train_t >= train_T.X.length) {
-                                        let avg_ret = 0;
-                                        const epochs = 12 * 10;
-                                        for (let e = 0; e < epochs; e++) {
-                                            train_T = puck.sample_trajectory(train_theta);
-                                            train_theta = optimize(puck.pi2, train_theta, train_T, {
-                                                alpha: 0.05 * Math.pow(0.92, train_R.length)
-                                            });
-                                            avg_ret += train_T.R.reduce((acc, val) => acc + val, 0);
-                                        }
-                                        train_R.push(avg_ret / epochs);
+								        let grad = policy_grad(puck.pi2, train_theta, traj, {});
+								        if (!grad_log_pi.accumulator) {
+								            grad_log_pi.accumulator = grad;
+								            grad_log_pi.samples = 1;
+								        } else {
+								            grad_log_pi.accumulator = matadd(grad_log_pi.accumulator, grad);
+								            grad_log_pi.samples += 1;
+								        }
+								        grad_log_pi.avg_ret += traj.R.reduce((acc, val) => acc + val, 0);
+								    }
+								    let grad_time_ms = performance.now() - start;
+								    const target_ms = 8;
+								    let time_per_traj_ms = grad_time_ms / grad_log_pi.epochs;
+								    grad_log_pi.epochs = Math.max(1, parseInt(target_ms / time_per_traj_ms));
+								    
+								    // Update policy once enough have been collected
+								    if (grad_log_pi.samples >= 2000) {
+								        // Only update the policy if it improved
+								        const alpha = 0.00001; // * Math.pow(0.95, R.length);
+								        let grad = matscl(grad_log_pi.accumulator, alpha);
+								        train_theta = matadd(train_theta, grad);
 
-                                        if (train_R.length % 20 === 0) {
-                                            train_t = 0;
-                                            train_T = puck.sample_trajectory(train_theta, [0,0], [train_ele.clientWidth, train_ele.clientHeight], true);
-                                        }
+								        console.log(`µ ret: ${grad_log_pi.avg_ret / grad_log_pi.samples}, epochs/fr: ${grad_log_pi.epochs}`);
+								        let avg_ret = grad_log_pi.avg_ret / grad_log_pi.samples;
 
-                                        clear("slide-training-reward");
-                                        draw_reward_plot("slide-training-reward", train_R);
-                                    } else {
-                                        clear("slide-training");
-                                        puck.draw("slide-training", train_t, train_T);
-                                    }
+								        train_R.push(avg_ret);
+								        grad_log_pi.reset();          
+								    }
+
+								    if (train_t >= train_T.X.length) {
+								        // Generate the next visualization traj
+								        train_t = 0;
+								        train_T = puck.sample_trajectory(train_theta, [0,0], [train_ele.clientWidth, train_ele.clientHeight], true);            
+								    }
+
+							        clear("slide-training-reward");
+								    draw_reward_plot("slide-training-reward", train_R);
+								    clear("slide-training");
+								    puck.draw("slide-training", train_t, train_T);
                                 });
                             })();
                         </script>
