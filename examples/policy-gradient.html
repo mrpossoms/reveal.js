@@ -22,7 +22,7 @@
                 };
 
                 if (!window.when_visible_observer) {
-                    window.when_visible_observer = new IntersectionObserver(visible_cb, {
+                    window.`when_visible_observer` = new IntersectionObserver(visible_cb, {
                         root: null,
                         rootMargin: '0px',
                         threshold: 0.9,
@@ -107,8 +107,8 @@
                 if (just_added || e.offsetWidth != CTX[e.id].width || e.offsetHeight != CTX[e.id].height) {
                     const dpr = window.devicePixelRatio || 1;
                     const rect = e.getBoundingClientRect();
-                    e.width = rect.width * dpr;
-                    e.height = rect.height * dpr;
+                    e.width = e.offsetWidth; //rect.width * dpr;
+                    e.height = e.offsetHeight; //rect.height * dpr;
                     CTX[e.id].scale(dpr, dpr);
                     //e.style.width = `${rect.width}px`;
                     //e.style.height = `${rect.height}px`;
@@ -129,6 +129,8 @@
                 const e = document.getElementById(cvsId);
                 const ctx = ctx_cache(e);
                 ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+                // ctx.lineWidth = 5;
+                // ctx.strokeRect(0, 0, ctx.canvas.width, ctx.canvas.height);
             }
 
             function text(ctx_cvs_or_id, message, point, params)
@@ -144,7 +146,7 @@
                 params = params || {};
                 ctx.textAlign = params.textAlign || 'center';
                 ctx.textBaseline = params.textBaseline || 'bottom';
-                ctx.font = params.font || '16px JetBrains Mono';
+                ctx.font = params.font || '16px Arial';
                 ctx.fillStyle = params.fillStyle || color('black');
 
                 if ('angle' in params) {
@@ -667,7 +669,7 @@
                         let text_metrics = ctx.measureText(str);
                         let th = text_metrics.height / 2;
                         let tw = text_metrics.width;
-                        ctx.font = '16px JetBrains Mono';
+                        ctx.font = '16px Arial';
                         ctx.fillStyle = color('black');
                         let x_off = x + tw > w ? -tw : 0;
                         ctx.fillText(str, x + x_off, y(p) + 16);
@@ -750,10 +752,11 @@
                 sample_trajectory: function(theta, left_top, right_bottom, randomize_target, opts) {
                     opts = opts || {};
                     let x_t = opts.initial_x ? [...opts.initial_x] : puck.initial_state(left_top, right_bottom, randomize_target);
+                    let time_steps = opts.time_steps ? opts.time_steps : 5 * 60;
 
                     let T = { X: [], A_pr: [], A: [], R: [], G: []};
 
-                    for (let t = 0; t < 5 * 60; t++) {
+                    for (let t = 0; t < time_steps; t++) {
                         let a_t = puck.pi2(theta, x_t);
                         let r_t = puck.step2(T, x_t, a_t, 0.99);
                         if (r_t == null) {
@@ -838,6 +841,13 @@
                     T.A.push(a_t.idx);
                     return r_t;
                 },
+                draw_puck: function(ctx, x, y) {
+                    ctx.beginPath();
+                    ctx.strokeStyle = color('black');
+                    ctx.beginPath();
+                    ctx.arc(x, y, 4, 0, 2 * Math.PI);
+                    ctx.stroke();
+                },
                 draw: function(cvsId, time, trajectory, left_top, right_bottom, opts)
                 {
                     opts = opts || {};
@@ -875,14 +885,19 @@
                             let x0 = trajectory.X[t-1];
                             let x1 = trajectory.X[t];
                             let r = trajectory.R[t];
-                            let intensity = Math.min(1, Math.abs(r) / norm_ref);
-                            let lo = 80, hi = 220;
-                            let v = Math.round(lo + (hi - lo) * intensity);
-                            ctx.strokeStyle = r >= 0 ? `rgb(0,${v},0)` : `rgb(${v},0,0)`;
+                            let p = Math.min(1, (r + norm_ref) / (2 * norm_ref));
+                            ctx.strokeStyle = r >= 0 ? `rgb(0,${255 * (p)},0)` : `rgb(${255 * (1-p)},0,0)`;
+                            ctx.globalCompositeOperation = 'source-over'
                             ctx.beginPath();
                             ctx.moveTo(x0[0], x0[1]);
                             ctx.lineTo(x1[0], x1[1]);
                             ctx.stroke();
+
+                            if (t == time) {
+                                ctx.font = '16px Arial';
+                                ctx.fillStyle = ctx.strokeStyle;
+                                ctx.fillText(r.toFixed(2), x1[0], x1[1] - 10);
+                            }
                         }
                     } else {
                         ctx.beginPath();
@@ -898,27 +913,49 @@
                         ctx.stroke();
                     }
 
-                    // draw puck
-                    ctx.beginPath();
-                    ctx.strokeStyle = color('black');
-                    ctx.beginPath();
-                    ctx.arc(state[0], state[1], 4, 0, 2 * Math.PI);
-                    ctx.stroke();
+                    puck.draw_puck(ctx, state[0], state[1]);
                 },
-                animate_inference: function(id, visible) {
+                animate_inference: function(id, visible, opts) {
+                    opts = opts || {
+                        frame_time_ms: 16,
+                        time_steps: 5 * 60,
+                    };
                     let cvs = document.getElementById(id);
-                    let T = puck.sample_trajectory(puck.trained_theta, [0,0], [cvs.clientWidth, cvs.clientHeight], true);
+                    let T = puck.sample_trajectory(puck.trained_theta, [0,0], [cvs.clientWidth, cvs.clientHeight], true, opts);
                     let t = 0;
-                    animate("pg-hook", 16)
+                    animate(id, opts.frame_time_ms)
                     .using(() => {
-                        clear("pg-hook");
-                        puck.draw("pg-hook", t, T);
+                        clear(id);
+                        puck.draw(id, t, T);
                         t++;
 
                         if (t >= T.X.length) {
-                    T = puck.sample_trajectory(puck.trained_theta, [0,0], [cvs.clientWidth, cvs.clientHeight], true);
+                            T = puck.sample_trajectory(puck.trained_theta, [0,0], [cvs.clientWidth, cvs.clientHeight], true, opts);
                             t = 0;
                         }
+                    })
+                    .when(visible);
+                },
+                animate_action_space: function(id, visible) {
+                    let cvs = document.getElementById(id);
+                    let t = 0;
+                    animate(id, 500)
+                    .using(() => {
+                        const ctx = ctx_cache(cvs);
+                        clear(id);
+                        let center = {x: ctx.width / 2, y: ctx.height / 2};
+                        puck.draw_puck(ctx, center.x, center.y);
+
+                        let action_class = t % 8;
+                        let d = puck.deltas[action_class];
+                        ctx.beginPath(); 
+                        ctx.moveTo(center.x + d[0] * 10, center.y + d[1] * 10); 
+                        ctx.lineTo(center.x + d[0] * 50, center.y + d[1] * 50);
+                        ctx.stroke();
+                        ctx.font = '16px Arial';
+                        ctx.fillStyle = color('black');
+                        ctx.fillText(action_class, center.x + d[0] * 60 - 5, center.y + d[1] * 60 + 5);
+                        t++;
                     })
                     .when(visible);
                 }
@@ -948,81 +985,89 @@
                 </section>
 
                 <section>
-                    <section data-markdown>
-                        <script type="text/template">
-                        ## Introduction
-                        ### What is Reinforcement-Learning?
+                    <h2>Introduction</h2>
+                    <h4>What is Reinforcement-Learning?</h4>
                     
-                        * Machine learning technique
-                        * Agent learns through interaction with an _ENVIRONMENT_
-                        </script>
-                    </section>
+                    <ul>
+                        <li class="fragment">Machine learning technique</li>
+                        <li class="fragment">Agent learns through interaction with an <b>environment</b></li>
+                        <ul>
+                            <li class="fragment">Observes a state</li>
+                            <li class="fragment">Takes an action</li>
+                            <li class="fragment">Recieves feedback (reward)</li>
+                        </ul>
+                    </ul>
                 </section>
 
                 <section>
-                    <section data-markdown>
-                        <script type="text/template">
-                        ## Environment
-                        * Has...
-                            * A state
-                            * Transition dynamics
-                            * A reward signal
-                        ---
-                        ## Environment
-                        * Sample a trajectory...
-                            1. Agent observes state $s_t$
-                            2. Chooses action $a_t$
-                            3. Environment returns:
-                                * Next state $s_{t+1}$
-                                * Reward $r_{t+1}$
-                            4. Repeat
-
-                        _The agent's goal is to maximize cumulative reward_
-                        ---
-                        ## Environment
-                        ### Markov Decision Process (MDP)
-
-                        An MDP is defined by the tuple:
-
-                        $$(\mathcal{S}, \mathcal{A}, P, R)$$
-
-                        * $\mathcal{S}$: state space  
-                        * $\mathcal{A}$: action space  
-                        * $P(\cdot \mid s,a)$: transition dynamics  
-                        * $R(s,a)$: expected reward  
-                        ---
-                        ## Environment
-                        #### Transition Dynamics
-
-                        $P(\cdot \mid s,a)$ defines a distribution over next states:
-
-                        $$s_{t+1} \sim P(\cdot \mid s_t, a_t)$$
-
-                        * Discrete states:
-                            $$P(s' \mid s,a) = \mathbb{P}(s_{t+1} = s')$$
-
-                        * Continuous states:
-                            $$p(s' \mid s,a) \text{ is a probability density}$$
-                        ---
-                        ## Environment
-                        #### Reward Function
-
-                        $$R(s,a) = \mathbb{E}[r_{t+1} \mid s_t = s, a_t = a]$$
-
-                        * Can also be stochastic:
-                            $$r_{t+1} \sim P(r \mid s_t, a_t)$$
+                    <section style="height: 100%;">
+                        <h2>Environment</h2>                        
+                        <ul style="height:50%;">
+                            <li class="fragment">Has a state space $\mathcal{S}$</li>
+                            <li class="fragment">Partially or fully observeable</li>
+                            <li class="fragment">Discrete or continuous</li>
+                            <ul>
+                                <li class="fragment">Our example is <b>continuous</b></li>
+                            </ul>
+                        </ul>
+                        <div class="fragment" style="height:50%;">
+                            <canvas id="slide-env-state-space" class="no-scroll" style="width:100%; height:100%; touch-action:none;"></canvas>
+                        </div>
+                        <script type="text/javascript">
+                            when_visible("slide-env-state-space", (visible) => {
+                                puck.animate_inference("slide-env-state-space", visible, {frame_time_ms: 2000, time_steps: 1});
+                            });
                         </script>
+                    </section> 
+
+                    <section style="height: 100%;">
+                        <h2>Environment</h2>                        
+                        <ul>
+                            <li class="fragment">Has an action space $\mathcal{A}$</li>
+                            <li class="fragment">Discrete or continuous</li>
+                            <ul>
+                                <li class="fragment">Our example is <b>discrete</b></li>
+                            </ul>        
+                        </ul>
+                        <div class="fragment" style="height:50%;">
+                            <canvas id="slide-env-action-space" class="no-scroll" style="width:100%; height:100%; touch-action:none;"></canvas>
+                        </div>
+                        <script type="text/javascript">
+                            when_visible("slide-env-action-space", (visible) => {
+                                puck.animate_action_space("slide-env-action-space", visible);
+                            });
+                        </script>
+                    </section> 
+
+                    <section style="height: 100%;">
+                        <h2>Environment</h2>                        
+                        <ul>
+                            <li class="fragment">Has transition dynamics $P(\cdot \mid s,a)$</li>
+                            <li class="fragment">A distribution over next states given...</li>
+                            <ul>
+                                <li class="fragment">Current state $s$</li>
+                                <li class="fragment">Chosen action $a$</li>
+                            </ul>
+                            <li class="fragment">Allows for stochastic environments</li>
+                            <li class="fragment">Our example however is <b>deterministic</b></li>
+                        </ul>
+                        <p class="fragment">$s_{t+1} = s_t + \Delta s(a_t)$</p>
                     </section>
 
-                    <section style="height:100%">
-                        <h4>Environment — State Transitions</h4>
-                        <canvas id="state-transitions" class="r-stretch"></canvas>
+                    <section style="height: 100%;">
+                        <h2>Environment</h2>                        
+                        <ul>
+                            <li class="fragment">Has a reward function $R(s_t, s_{t+1})$</li>
+                            <li class="fragment">Reward as a result of transitioning from $s_t$ to $s_{t+1}$</li>
+                            <li class="fragment">$s_{t+1}$ results from choice $a_t$ and transion dynamics</li>
+                        </ul>
+                        <canvas class="fragment" id="slide-env-reward-func" style="height: 50%;"></canvas>
                         <script type="text/javascript">
                             (function() {
                                 const ST_STEP_SIZE = 15;
                                 const ST_FPS = 2;
                                 let st_rand_theta = randmat(2, 8);
-                                let st_cvs = document.getElementById("state-transitions");
+                                let st_cvs = document.getElementById("slide-env-reward-func");
                                 let st_T = null;
                                 let st_t = 0;
 
@@ -1030,7 +1075,7 @@
                                 function st_sample() {
                                     let w = st_cvs.clientWidth, h = st_cvs.clientHeight;
                                     if (!st_spawn) {
-                                        st_spawn = [w * 0.15, h * 0.15, w * 0.5, h * 0.5];
+                                        st_spawn = [w * 0.5, h * 0.5, w * 0.75, h * 0.75];
                                     }
                                     let prev = puck.step_size;
                                     puck.set_step_size(ST_STEP_SIZE);
@@ -1038,12 +1083,12 @@
                                     puck.set_step_size(prev);
                                 }
 
-                                when_visible("state-transitions", (visible) => {
+                                when_visible("slide-env-reward-func", (visible) => {
                                     if (visible && st_T === null) { st_sample(); }
-                                    animate("state-transitions", 1000 / ST_FPS).using(() => {
+                                    animate("slide-env-reward-func", 1000 / ST_FPS).using(() => {
                                         if (!st_T) return;
-                                        clear("state-transitions");
-                                        puck.draw("state-transitions", st_t, st_T, null, null, {reward_colors: true});
+                                        clear("slide-env-reward-func");
+                                        puck.draw("slide-env-reward-func", st_t, st_T, null, null, {reward_colors: true});
                                         st_t++;
                                         if (st_t >= st_T.X.length) {
                                             st_sample();
