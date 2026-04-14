@@ -15,28 +15,44 @@
 
             function when_visible(id, cb)
             {
+                let hidden = (el) => {
+                    if (el.classList.contains('fragment')) {
+                        return !el.classList.contains('visible');
+                    } else {
+                        return false;
+                    }
+                };
+
                 let visible_cb = (entries, observer) => {
                     entries.forEach((entry) => {
-                        if (entry.target.classList.contains('fragment')) {
-                            window.when_visible_element_callbacks[entry.target.id](entry.isIntersecting && entry.target.classList.contains('visible'));
-                        } else {
-                            window.when_visible_element_callbacks[entry.target.id](entry.isIntersecting);                          
-                        }
+                        entry.target.in_view = entry.isIntersecting;
+
+                        window.when_visible_element_callbacks[entry.target.id](!entry.target.transparent && entry.target.in_view);
                     });
                 };
 
-                if (!window.when_visible_observer) {
-                    window.when_visible_observer = new IntersectionObserver(visible_cb, {
+                let mutation_cb = (entries, observer) => {
+                    entries.forEach((entry) => {
+                        entry.target.transparent = hidden(entry.target);
+
+                        window.when_visible_element_callbacks[entry.target.id](!entry.target.transparent && entry.target.in_view);
+                    });
+                };
+
+                if (!window.intersection_observer) {
+                    window.intersection_observer = new IntersectionObserver(visible_cb, {
                         root: null,
                         rootMargin: '0px',
-                        threshold: 0.9,
+                        threshold: 0.9
                     });
+                    window.mutation_observer = new MutationObserver(mutation_cb);
                     window.when_visible_element_callbacks = {};
                 }
 
                 let ele = document.getElementById(id);
                 window.when_visible_element_callbacks[id] = cb;
-                window.when_visible_observer.observe(ele);
+                window.intersection_observer.observe(ele);
+                window.mutation_observer.observe(ele, {attributes: true});
             }
 
             function animate(id, duration) {
@@ -49,6 +65,9 @@
                         return {
                             when: function(condition) {
                                 if (condition) {
+                                    if (window.animation_intervals[id]) {
+                                        clearInterval(window.animation_intervals[id]);
+                                    }
                                     window.animation_intervals[id] = setInterval(animation, duration);
                                     console.log('setInverval: ' + duration + ' for ' + id);
                                 } else if (window.animation_intervals[id]) {
@@ -689,7 +708,18 @@
                 step_size: 2,
                 set_step_size: function(s) {
                 	this.step_size = s;
-                	this.deltas = null;
+                	this._deltas = null;
+                },
+                deltas: function() {
+                    if (!this._deltas) {
+                        this._deltas = [];
+                        for (let i = 0; i < 8; i++) {
+                            let t = (i / 8) * Math.PI*2;
+                            this._deltas.push([Math.cos(t) * this.step_size, Math.sin(t) * this.step_size]);
+                        }
+                    }
+                    
+                    return this._deltas;
                 },
                 trained_theta: [[8.66745740506822,5.996406710365718,-0.15365873881940448,-6.311126006483258,-8.81864980406707,-6.359052573470944,-0.08042535100680422,6.072945095631422],[0.08889004751905238,6.09754307857545,8.8735708505469,6.268372669526972,0.07562654356798991,-6.035568669418457,-8.716570151762186,-6.128285213749267]],
                 phi: function(x) {
@@ -821,16 +851,9 @@
                     let x_t1 = zeros(4, 1);
 
                     let s = puck.step_size;
-					if (!puck.deltas) {
-						puck.deltas = [];
-						for (let i = 0; i < 8; i++) {
-							let t = (i / 8) * Math.PI*2;
-							puck.deltas.push([Math.cos(t) * s, Math.sin(t) * s]);
-						}
-					}
 
-                    x_t1[0] = x_t[0] + puck.deltas[a_t.idx[0]][0];
-                    x_t1[1] = x_t[1] + puck.deltas[a_t.idx[0]][1];
+                    x_t1[0] = x_t[0] + puck.deltas()[a_t.idx[0]][0];
+                    x_t1[1] = x_t[1] + puck.deltas()[a_t.idx[0]][1];
                     x_t1[2] = x_t[2];
                     x_t1[3] = x_t[3];
 
@@ -951,7 +974,7 @@
                         puck.draw_puck(ctx, center.x, center.y);
 
                         let action_class = t % 8;
-                        let d = puck.deltas[action_class];
+                        let d = puck.deltas()[action_class];
                         ctx.beginPath(); 
                         ctx.moveTo(center.x + d[0] * 10, center.y + d[1] * 10); 
                         ctx.lineTo(center.x + d[0] * 50, center.y + d[1] * 50);
@@ -1166,10 +1189,10 @@
                                     // direction lines proportional to probability
                                     for (let i = 0; i < 8; i++) {
                                         let len = MAX_ARROW * pol_pr[i];
-                                        let ex = pol_x[0] + puck.deltas[i][0] * (len + 10);
-                                        let ey = pol_x[1] + puck.deltas[i][1] * (len + 10);
-                                        let offx = pol_x[0] + puck.deltas[i][0] * 10;
-                                        let offy = pol_x[1] + puck.deltas[i][1] * 10;
+                                        let ex = pol_x[0] + puck.deltas()[i][0] * (len + 10);
+                                        let ey = pol_x[1] + puck.deltas()[i][1] * (len + 10);
+                                        let offx = pol_x[0] + puck.deltas()[i][0] * 10;
+                                        let offy = pol_x[1] + puck.deltas()[i][1] * 10;
                                         if (i === last_sampled) {
                                             ctx.save();
                                             ctx.strokeStyle = color('black');
