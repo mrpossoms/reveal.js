@@ -17,12 +17,16 @@
             {
                 let visible_cb = (entries, observer) => {
                     entries.forEach((entry) => {
-                        window.when_visible_element_callbacks[entry.target.id](entry.isIntersecting);
+                        if (entry.target.classList.contains('fragment')) {
+                            window.when_visible_element_callbacks[entry.target.id](entry.isIntersecting && entry.target.classList.contains('visible'));
+                        } else {
+                            window.when_visible_element_callbacks[entry.target.id](entry.isIntersecting);                          
+                        }
                     });
                 };
 
                 if (!window.when_visible_observer) {
-                    window.`when_visible_observer` = new IntersectionObserver(visible_cb, {
+                    window.when_visible_observer = new IntersectionObserver(visible_cb, {
                         root: null,
                         rootMargin: '0px',
                         threshold: 0.9,
@@ -1029,9 +1033,7 @@
                                 <li class="fragment">Our example is <b>discrete</b></li>
                             </ul>        
                         </ul>
-                        <div class="fragment" style="height:50%;">
-                            <canvas id="slide-env-action-space" class="no-scroll" style="width:100%; height:100%; touch-action:none;"></canvas>
-                        </div>
+                        <canvas id="slide-env-action-space" class="no-scroll fragment" style="width:100%; height:50%; touch-action:none;"></canvas>    
                         <script type="text/javascript">
                             when_visible("slide-env-action-space", (visible) => {
                                 puck.animate_action_space("slide-env-action-space", visible);
