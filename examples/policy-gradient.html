@@ -583,13 +583,13 @@
                 // Compute baseline: mean reward-to-go across all timesteps and trajectories
                 let baseline = 0;
                 let total_steps = 0;
-                for (let ti = 0; ti < T.length; ti++) {
-                    for (let t = 0; t < T[ti].G.length; t++) {
-                        baseline += T[ti].G[t];
-                        total_steps++;
-                    }
-                }
-                baseline = total_steps > 0 ? baseline / total_steps : 0;
+                // for (let ti = 0; ti < T.length; ti++) {
+                //     for (let t = 0; t < T[ti].G.length; t++) {
+                //         baseline += T[ti].G[t];
+                //         total_steps++;
+                //     }
+                // }
+                // baseline = total_steps > 0 ? baseline / total_steps : 0;
 
                 for (let ti = 0; ti < T.length; ti++) {
                     // const p = 1 / T[ti].X.length;
@@ -1127,7 +1127,46 @@
                 </section>
 
                 <section>
-                    <section data-markdown>
+                    <section>
+                        <h2>Policy</h2>
+                        <p>$\pi_\theta(a|s)$</p>
+                        <ul>
+                            <li class="fragment">The core of an RL agent</li>
+                            <li class="fragment">Function which maps state $s$ to action $a$</li>
+                            <ul>
+                                <li class="fragment">Deterministic or stochastic</li>
+                            </ul>
+                            <li class="fragment">Mapping of $s$ to $a$ is defined by parameters $\theta$</li>
+                            <li class="fragment">Can be defined for discrete or continuous state and action spaces</li>
+                        </ul>
+                    </section>
+
+                    <section>
+                        <h2>Policy</h2>
+                        <p>$\pi_\theta(a|s)$</p>
+                        <ul>
+                            <li class="fragment">In our example...</li>
+                            <ul>
+                                <li class="fragment">The state space is <b>continuous</b></li>
+                                <li class="fragment">The action space is <b>discrete</b></li>
+                                <li class="fragment">The policy is stochastic</li>
+                                <ul>
+                                    <li class="fragment">Addresses Explore-Exploit dilemma</li>
+                                </ul>
+                            </ul>
+                        </ul>
+                    </section>
+
+                    <section>
+                        <h2>Policy</h2>
+                            <p>$$z = \theta\phi(s)$$</p>
+                            <p>Where $z$ is the pre-activation, $\phi$ is a function that extracts features from $s$</p>
+                            <p>$$\pi_\theta(.|s) = \frac{e^{z}}{\sum_{i}e^{z_{i}}}$$</p>
+                            <p>We can choose a specific action as...</p>
+
+                            <p>$$a_t \sim \pi_{\theta}(.|s_t)$$</p>
+                    </section>
+<!--                     <section data-markdown>
                         <script type="text/template">
                             ## Policy
                             $\pi_\theta(a|s)$
@@ -1154,12 +1193,12 @@
 
                             $$a_t \sim \pi_{\theta}(.|s_t)$$
                         </script>
-                    </section>
+                    </section> -->
                     <section style="height:100%">
                         <h4>Policy — $\pi_\theta(.|s)$</h4>
                         <div style="display:grid; grid-template-columns:55% 45%; gap:8px; height:calc(100% - 3em);">
                             <canvas id="slide-pol-puck" class="no-scroll" style="width:100%; height:100%; touch-action:none;"></canvas>
-                            <canvas id="slide-pol-sampling" style="width:100%; height:50%;"></canvas>
+                            <canvas id="slide-pol-sampling" style="display:flex; width:100%; height:50%; align-items: center;"></canvas>
                         </div>
                         <script type="text/javascript">
                             (function() {
@@ -1571,7 +1610,8 @@
 
                         Example implementation.
 
-                        <pre><code data-trim data-line-numbers data-noescape class="language-javascript">
+                        <pre style="width:100%">
+                        <code data-trim data-line-numbers data-noescape class="language-javascript">
                         function run_trials_and_optimize(env, theta, trials) {
                             // accumulator for policy gradient
                             let grad_theta = theta * 0;
@@ -1616,7 +1656,8 @@
                             const alpha = 0.01;
                             return theta + alpha * grad_theta;
                         }
-                        </code></pre>
+                        </code>
+                        </pre>
                     </section>
                 </section>
 
@@ -1670,13 +1711,16 @@
 								    }
 								    let grad_time_ms = performance.now() - start;
 								    const target_ms = 8;
-								    let time_per_traj_ms = grad_time_ms / grad_log_pi.epochs;
+								    let time_per_traj_ms = Math.max(1, grad_time_ms / Math.max(1, grad_log_pi.epochs));
 								    grad_log_pi.epochs = Math.max(1, parseInt(target_ms / time_per_traj_ms));
+                                    if (!isFinite(grad_log_pi.epochs)) {
+                                        grad_log_pi.epochs = 1;
+                                    }
 								    
 								    // Update policy once enough have been collected
 								    if (grad_log_pi.samples >= 2000) {
 								        // Only update the policy if it improved
-								        const alpha = 0.00001; // * Math.pow(0.95, R.length);
+								        const alpha = 0.0001; // * Math.pow(0.95, R.length);
 								        let grad = matscl(grad_log_pi.accumulator, alpha);
 								        train_theta = matadd(train_theta, grad);
 
