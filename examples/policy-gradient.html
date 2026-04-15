@@ -946,6 +946,7 @@
                     opts = opts || {
                         frame_time_ms: 16,
                         time_steps: 5 * 60,
+                        print_state: false
                     };
                     let cvs = document.getElementById(id);
                     let T = puck.sample_trajectory(puck.trained_theta, [0,0], [cvs.clientWidth, cvs.clientHeight], true, opts);
@@ -953,6 +954,15 @@
                     animate(id, opts.frame_time_ms)
                     .using(() => {
                         clear(id);
+                        if (opts.print_state) {
+                            let s = T.X[0];
+                            text(id, `s = [${s[0].toFixed(2)}, ${s[1].toFixed(2)}, ${s[2].toFixed(2)}, ${s[3].toFixed(2)}]`, [cvs.width / 2, 20], {
+                                // textAlign: 'left',
+                                fillStyle: color('LightGray'),
+                                font: '20px Arial'
+                            });                            
+                        }
+
                         puck.draw(id, t, T);
                         t++;
 
@@ -976,11 +986,11 @@
                         let action_class = t % 8;
                         let d = puck.deltas()[action_class];
                         ctx.beginPath(); 
+                        ctx.fillStyle = ctx.strokeStyle = color('LightGray');
                         ctx.moveTo(center.x + d[0] * 10, center.y + d[1] * 10); 
                         ctx.lineTo(center.x + d[0] * 50, center.y + d[1] * 50);
                         ctx.stroke();
                         ctx.font = '16px Arial';
-                        ctx.fillStyle = color('black');
                         ctx.fillText(action_class, center.x + d[0] * 60 - 5, center.y + d[1] * 60 + 5);
                         t++;
                     })
@@ -1028,29 +1038,32 @@
 
                 <section>
                     <section style="height: 100%;">
-                        <h2>Environment</h2>                        
+                        <h2>Environment</h2>    
+                        <p class="fragment">$\mathcal{S}$</p>                    
                         <ul style="height:50%;">
-                            <li class="fragment">Has a state space $\mathcal{S}$</li>
+                            <li class="fragment">A state space</li>
                             <li class="fragment">Partially or fully observeable</li>
                             <li class="fragment">Discrete or continuous</li>
                             <ul>
                                 <li class="fragment">Our example is <b>continuous</b></li>
                             </ul>
+                            <p class="fragment">$s = [puck_x, puck_y, cross_x, cross_y]$</p>
                         </ul>
                         <div class="fragment" style="height:50%;">
                             <canvas id="slide-env-state-space" class="no-scroll" style="width:100%; height:100%; touch-action:none;"></canvas>
                         </div>
                         <script type="text/javascript">
                             when_visible("slide-env-state-space", (visible) => {
-                                puck.animate_inference("slide-env-state-space", visible, {frame_time_ms: 2000, time_steps: 1});
+                                puck.animate_inference("slide-env-state-space", visible, {frame_time_ms: 2000, time_steps: 1, print_state: true});
                             });
                         </script>
                     </section> 
 
                     <section style="height: 100%;">
-                        <h2>Environment</h2>                        
+                        <h2>Environment</h2>
+                        <p>$\mathcal{A}$</p>
                         <ul>
-                            <li class="fragment">Has an action space $\mathcal{A}$</li>
+                            <li class="fragment">Action space</li>
                             <li class="fragment">Discrete or continuous</li>
                             <ul>
                                 <li class="fragment">Our example is <b>discrete</b></li>
@@ -1065,9 +1078,10 @@
                     </section> 
 
                     <section style="height: 100%;">
-                        <h2>Environment</h2>                        
+                        <h2>Environment</h2>
+                        <p class="fragment">$P(\cdot \mid s,a)$</p>
                         <ul>
-                            <li class="fragment">Has transition dynamics $P(\cdot \mid s,a)$</li>
+                            <li class="fragment">State transition dynamics</li>
                             <li class="fragment">A distribution over next states given...</li>
                             <ul>
                                 <li class="fragment">Current state $s$</li>
@@ -1080,11 +1094,11 @@
                     </section>
 
                     <section style="height: 100%;">
-                        <h2>Environment</h2>                        
+                        <h2>Environment</h2>
+                        <p class="fragment">$R(s_t, s_{t+1})$</p>             
                         <ul>
-                            <li class="fragment">Has a reward function $R(s_t, s_{t+1})$</li>
                             <li class="fragment">Reward as a result of transitioning from $s_t$ to $s_{t+1}$</li>
-                            <li class="fragment">$s_{t+1}$ results from choice $a_t$ and transion dynamics</li>
+                            <li class="fragment">$s_{t+1}$ results from choice $a_t$ and transition dynamics</li>
                         </ul>
                         <canvas class="fragment" id="slide-env-reward-func" style="height: 50%;"></canvas>
                         <script type="text/javascript">
@@ -1235,11 +1249,11 @@
                                         if (i === last_sampled) {
                                             ctx.save();
                                             ctx.strokeStyle = color('black');
-                                            ctx.lineWidth = 3;
+                                            // ctx.lineWidth = 3;
                                             line(ctx, offx, offy, ex, ey);
                                             ctx.restore();
                                         } else {
-                                            ctx.strokeStyle = color('black');
+                                            ctx.strokeStyle = color('LightGray');
                                             line(ctx, offx, offy, ex, ey);
                                         }
                                     }
@@ -1348,8 +1362,10 @@
                 <section>
                     <section data-markdown>
                         <script type="text/template">
-                            ## What are Policy Gradient Methods?
+                            ## Policy Gradient
                             
+                            What are Policy Gradient Methods?
+
                             * Elegant solution to the RL problem
                             * No knowledge of environment dynamics
                             * No estimation of a value function
@@ -1359,7 +1375,7 @@
 
                     <section>
 
-                        <h2>Policy Gradient Methods</h2>
+                        <h4>Policy Gradient</h4>
                         $$J(\theta) = \mathop{\mathbb{E}}_{\tau \sim \pi_{\theta}}[R(\tau)]$$
                         where
                         $$R(\tau)=\sum_{t}\gamma^t r_t$$
@@ -1372,7 +1388,7 @@
                         </p>
                     </section>
                     <section>
-                        <h4>Policy Gradient Methods</h4>
+                        <h4>Policy Gradient</h4>
                         First, we reframe the expectation as an integral. By the definition of the expectation.
                         $$
                         \mathop{\mathbb{E}}_{x \sim p(x)}[f(x)]=\int f(x)p(x) dx
@@ -1385,7 +1401,7 @@
                     </section>
 
                     <section>
-                        <h4>Policy Gradient Methods</h4>
+                        <h4>Policy Gradient</h4>
                         Next, we take the gradient w.r.t. $\theta$
                         $$
                         \nabla_{\theta}J(\theta) = \nabla_{\theta} \int R(\tau) p_{ \theta }(\tau) d\tau
@@ -1398,7 +1414,7 @@
                     </section>
 
                     <section>
-                        <h4>Policy Gradient Methods</h4>
+                        <h4>Policy Gradient</h4>
                         <p>
                         A quick aside... 
                         Consider a function
@@ -1418,7 +1434,7 @@
                     </section>
 
                     <section>
-                        <h4>Policy Gradient Methods</h4>
+                        <h4>Policy Gradient</h4>
                         Right now we have...
                         $$
                         \nabla_{\theta} p_{ \theta }(\tau)
@@ -1431,7 +1447,7 @@
                     </section>
 
                     <section>
-                        <h4>Policy Gradient Methods</h4>
+                        <h4>Policy Gradient</h4>
                         However you might have noticed that this
                         $$
                         p_{\theta}(\tau)\textcolor{red}{\frac{\nabla_{\theta}p_{ \theta }(\tau)}{\textcolor{red}{p_{\theta}(\tau)}}}
@@ -1443,7 +1459,7 @@
                     </section>
                     
                     <section>
-                        <h4>Policy Gradient Methods</h4>
+                        <h4>Policy Gradient</h4>
                         Which leads us to what's called the <i>likelihood-ratio trick</i>
                         $$
                         \nabla_{\theta} p_{ \theta }(\tau)=p_{\theta}(\tau)\frac{\nabla_{\theta}p_{ \theta }(\tau)}{p_{\theta}(\tau)}=p_{\theta}(\tau)\nabla_{\theta}log(p_{ \theta }(\tau))
@@ -1459,7 +1475,7 @@
                     </section>
 
                     <section>
-                        <h4>Policy Gradient Methods</h4>
+                        <h4>Policy Gradient</h4>
                         Now we can take our integral
                         $$
                         \nabla_{\theta}J(\theta) = \int \textcolor{orange}{R(\tau)} \textcolor{red}{p_{\theta}(\tau)}\textcolor{orange}{\nabla_{\theta}log(p_{ \theta }(\tau))} d\tau
@@ -1476,7 +1492,7 @@
                     </section>
 
                     <section>
-                        <h4>Policy Gradient Methods</h4>
+                        <h4>Policy Gradient</h4>
                         Unfortunately we still have $p_{\theta}(\tau)$ in our expectation. Which includes both our policy and the environment.
                         $$
                         p_{\theta}(\tau)=\prod_{t}\pi_{\theta}(a_{t}|s_{t})P(s_{t+1}|s_{t},a_{t}) 
@@ -1489,7 +1505,7 @@
                     </section>
 
                     <section>
-                        <h4>Policy Gradient Methods</h4>
+                        <h4>Policy Gradient</h4>
                         
                         And the environment dynamics term $P$ has no dependence on $\theta$, its gradient is 0
                         $$
@@ -1502,7 +1518,7 @@
                     </section>
 
                     <section>
-                        <h4>Policy Gradient Methods</h4>
+                        <h4>Policy Gradient</h4>
                         
                         A quick substitution of 
                         $$
@@ -1519,7 +1535,7 @@
                     </section>
 
                     <section>
-                        <h4>Policy Gradient Methods</h4>
+                        <h4>Policy Gradient</h4>
                         
                         Now we have a computable gradient
                         $$
@@ -1534,19 +1550,18 @@
                 </section>
 
                 <section>
-                    <section data-markdown>
-                        <script type="text/template">
-                            ## How Can We Implement These Ideas?
-
-                            * Slight adjustment to expectation...
-                            * Monte-Carlo Policy Gradient
-                        </script>
-                    </section>                    
-                </section>
-
-                <section>
                     <section>
                         <h2>Implementation</h2>
+
+                        <ul>
+                            <li class="fragment">How can we implement these ideas?</li>
+                            <li class="fragment">Slight adjustment to expectation</li>
+                            <li class="fragment">Monte-Carlo Policy Gradient</li>
+                        </ul>
+                    </section>
+
+                    <section>
+                        <h4>Implementation</h4>
 
                         In practice this has a problem
                         $$
