@@ -487,10 +487,12 @@
                             return i == r && j == c ? val - h : val;
                         }));
 
-                        let pi_plus = Math.log(pi_pr(theta_plus, x, a));
-                        let pi_minus = Math.log(pi_pr(theta_minus, x, a));
+                        let pi_pr_plus = pi_pr(theta_plus, x, a);
+                        let pi_pr_minus = pi_pr(theta_minus, x, a);
+                        let log_pi_plus = Math.log(pi_pr_plus.pr[0][pi_pr_plus.idx[0]]);
+                        let log_pi_minus = Math.log(pi_pr_minus.pr[0][pi_pr_minus.idx[0]]);
 
-                        let grad = (pi_plus - pi_minus)  / (2 * h);
+                        let grad = (log_pi_plus - log_pi_minus)  / (2 * h);
                         
                         if (isNaN(grad)) {
                             throw "NaN gradient element value"; 
@@ -554,7 +556,7 @@
 					let x_t = traj.X[t];
 					let a_t = traj.A[t];
 					let grad_log_pi_t = policy_grad_analytical(pi, theta, x_t, a_t, params.h);
-
+                    // let grad_log_pi_t = policy_grad_findiff(pi, theta, x_t, a_t, params.h);
 					let G_t = 0;
 					for (let k = t; k < traj.X.length; k++) {
 						G_t += Math.pow(0.9, k - t) * traj.R[k];
@@ -1031,7 +1033,7 @@
                         <ul>
                             <li class="fragment">Observes a state</li>
                             <li class="fragment">Takes an action</li>
-                            <li class="fragment">Recieves feedback (reward)</li>
+                            <li class="fragment">Receives feedback (reward)</li>
                         </ul>
                     </ul>
                 </section>
@@ -1039,7 +1041,12 @@
                 <section>
                     <section style="height: 100%;">
                         <h2>Environment</h2>    
-                        <p class="fragment">$\mathcal{S}$</p>                    
+                        <p>Defined by several key components</p>
+                    </section> 
+
+                    <section style="height: 100%;">
+                        <h2>Environment</h2>    
+                        <p>$\mathcal{S}$</p>                    
                         <ul style="height:50%;">
                             <li class="fragment">A state space</li>
                             <li class="fragment">Partially or fully observeable</li>
@@ -1049,7 +1056,7 @@
                             </ul>
                             <p class="fragment">$s = [puck_x, puck_y, cross_x, cross_y]$</p>
                         </ul>
-                        <div class="fragment" style="height:50%;">
+                        <div class="fragment" style="height:25%;">
                             <canvas id="slide-env-state-space" class="no-scroll" style="width:100%; height:100%; touch-action:none;"></canvas>
                         </div>
                         <script type="text/javascript">
@@ -1079,7 +1086,7 @@
 
                     <section style="height: 100%;">
                         <h2>Environment</h2>
-                        <p class="fragment">$P(\cdot \mid s,a)$</p>
+                        <p>$P(\cdot \mid s,a)$</p>
                         <ul>
                             <li class="fragment">State transition dynamics</li>
                             <li class="fragment">A distribution over next states given...</li>
@@ -1095,7 +1102,7 @@
 
                     <section style="height: 100%;">
                         <h2>Environment</h2>
-                        <p class="fragment">$R(s_t, s_{t+1})$</p>             
+                        <p>$R(s_t, s_{t+1})$</p>             
                         <ul>
                             <li class="fragment">Reward as a result of transitioning from $s_t$ to $s_{t+1}$</li>
                             <li class="fragment">$s_{t+1}$ results from choice $a_t$ and transition dynamics</li>
@@ -1148,10 +1155,9 @@
                             <li class="fragment">The core of an RL agent</li>
                             <li class="fragment">Function which maps state $s$ to action $a$</li>
                             <ul>
+                                <li class="fragment">Defined by parameters $\theta$</li>
                                 <li class="fragment">Deterministic or stochastic</li>
                             </ul>
-                            <li class="fragment">Mapping of $s$ to $a$ is defined by parameters $\theta$</li>
-                            <li class="fragment">Can be defined for discrete or continuous state and action spaces</li>
                         </ul>
                     </section>
 
@@ -1168,51 +1174,63 @@
                                     <li class="fragment">Addresses Explore-Exploit dilemma</li>
                                 </ul>
                             </ul>
+                            <p class="fragment">Let's build our policy.</p>
                         </ul>
                     </section>
 
                     <section>
                         <h2>Policy</h2>
-                            <p>$$z = \theta\phi(s)$$</p>
-                            <p>Where $z$ is the pre-activation, $\phi$ is a function that extracts features from $s$</p>
-                            <p>$$\pi_\theta(.|s) = \frac{e^{z}}{\sum_{i}e^{z_{i}}}$$</p>
-                            <p>We can choose a specific action as...</p>
-
-                            <p>$$a_t \sim \pi_{\theta}(.|s_t)$$</p>
+                            <p>First we need to turn the state...</p>
+                            <p class="fragment">$s = [puck_x, puck_y, cross_x, cross_y]$</p>
+                            <p class="fragment">into something better suited for our policy</p>
+                            <p class="fragment">
+                            $$
+                            d(s) = s_{cross} - s_{puck}
+                            $$
+                            $$
+                            \phi(s) = \frac{d(s)}{||d(s)||}
+                            $$
+                            <sub>Where $\phi$ is a row vector</sub>
+                            </p>
+                            <p class="fragment">This is <i>feature extraction</i>, and can simplify learning</p>
                     </section>
-<!--                     <section data-markdown>
-                        <script type="text/template">
-                            ## Policy
-                            $\pi_\theta(a|s)$
-                            * The core of an RL agent
-                            * Function which maps state $s$ to action $a$
-                            	* Deterministic or stochastic
-                            * Mapping of $s$ to $a$ is defined by parameters $\theta$
-                            * Can be defined for discrete or continous state and action spaces
-                            ---
-                            ## Policy
-                            $\pi_\theta(a|s)$
-                            * In our examples...
-                                * The state space is continuous
-                                * The action space is discrete
-                                * The policy is a probability distribution
-                                    * For all action classes
-                                    * Stochastic
-                            ---
-                            ## Policy
-                            $$z = \theta\phi(s)$$
-                            $\phi$ is a function that extracts features from $s$
-                            $$\pi_\theta(.|s) = \frac{e^{z}}{\sum_{i}e^{z_{i}}}$$
-                            We can choose a specific action as...
 
-                            $$a_t \sim \pi_{\theta}(.|s_t)$$
-                        </script>
-                    </section> -->
+                    <section>
+                        <h2>Policy</h2>
+                            <p>Next we need parameters to control our policy</p>
+                            <p class="fragment">
+                            $$
+                            \theta = \begin{bmatrix}
+                            \theta_{1,1} & \theta_{1,2} & ... & \theta_{1,7} & \theta_{1,8} \\
+                            \theta_{2,1} & \theta_{2,2} & ... & \theta_{2,7} & \theta_{2,8} \\
+                            \end{bmatrix}
+                            $$
+                            </p>
+                            <p class="fragment">
+                            Which will linearly map features to our action classes
+                            $$z = \phi(s)\theta$$
+                            </p>
+                    </section>
+
+                    <section>
+                        <h2>Policy</h2>
+                        <p>We have a linear mapping $z$ to our actions, but we need a probability distribution</p>
+                        <p class="fragment">
+                        That's where softmax comes in
+                        $$\pi_\theta(\cdot|s) = \frac{e^{z}}{\sum_{i}e^{z_{i}}}$$
+                        </p>
+                            
+                        <p class="fragment">
+                        We can sample from this distribution to choose an action
+                        $$a_t \sim \pi_{\theta}(\cdot|s_t)$$
+                        </p>
+                    </section>
+
                     <section style="height:100%">
-                        <h4>Policy — $\pi_\theta(.|s)$</h4>
+                        <h4>Policy — $\pi_\theta(\cdot|s)$</h4>
                         <div style="display:grid; grid-template-columns:55% 45%; gap:8px; height:calc(100% - 3em);">
                             <canvas id="slide-pol-puck" class="no-scroll" style="width:100%; height:100%; touch-action:none;"></canvas>
-                            <canvas id="slide-pol-sampling" style="display:flex; width:100%; height:50%; align-items: center;"></canvas>
+                            <canvas id="slide-pol-sampling" style="position: relative; width:100%; height:50%; top:25%; align-items: center;"></canvas>
                         </div>
                         <script type="text/javascript">
                             (function() {
@@ -1367,8 +1385,7 @@
                             What are Policy Gradient Methods?
 
                             * Elegant solution to the RL problem
-                            * No knowledge of environment dynamics
-                            * No estimation of a value function
+                            * No explicit knowledge of environment dynamics
                             * Seeks to directly optimize the agent's _POLICY_
                         </script>
                     </section>
@@ -1378,13 +1395,14 @@
                         <h4>Policy Gradient</h4>
                         $$J(\theta) = \mathop{\mathbb{E}}_{\tau \sim \pi_{\theta}}[R(\tau)]$$
                         where
+                        $$τ = (s₀, a₀, r₀, s₁, a₁, …)$$
                         $$R(\tau)=\sum_{t}\gamma^t r_t$$
                         <ul>
                             <li>Our objective is to maximize $J(\theta)$</li>
                             <li>We will do so by fiddling with $\theta$</li>
                         </ul>
                         <p>
-                        Lets see how we get there..
+                        Lets see how we get there
                         </p>
                     </section>
                     <section>
@@ -1537,54 +1555,59 @@
                     <section>
                         <h4>Policy Gradient</h4>
                         
-                        Now we have a computable gradient
+                        We turned an intractable gradient into something we can estimate
                         $$
                         \nabla_{\theta}J(\theta) = \mathop{\mathbb{E}}_{\tau \sim \pi_{\theta}}[R(\tau)\sum_{t}\nabla_{\theta}log(\pi_{\theta}(a_{t}|s_{t}))]
                         $$
-                        Finally we have what we need to adjust our policy
+                        This tells us how to increase the probability of actions that led to high reward.
                         $$
                         \theta' \leftarrow \theta + \alpha \nabla_{\theta}J(\theta)
                         $$
+                        Finally, we can adjust our policy
                     </section>
-
                 </section>
 
                 <section>
                     <section>
                         <h2>Implementation</h2>
-
+                        How can we implement these ideas?
                         <ul>
-                            <li class="fragment">How can we implement these ideas?</li>
                             <li class="fragment">Slight adjustment to expectation</li>
                             <li class="fragment">Monte-Carlo Policy Gradient</li>
+                            <li class="fragment">Algorithm pseudo-code</li>
                         </ul>
                     </section>
 
                     <section>
                         <h4>Implementation</h4>
-
+                        <p>
                         In practice this has a problem
                         $$
                         \nabla_{\theta}J(\theta) = \mathop{\mathbb{E}}_{\tau \sim \pi_{\theta}}[\textcolor{red}{R(\tau)}\sum_{t}\nabla_{\theta}log(\pi_{\theta}(a_{t}|s_{t}))]
                         $$
+                        </p>
                         <ul>
-                        <li>This weights all actions by the same return $R(\tau)$</li>
-                        <ul>
-                            <li>Attributes past rewards to future actions</li>
-                            <li>Ignores immediate reward of an action</li> 
-                        </ul>
-                        <li>Instead weigh $a_t$ by only its <i>future rewards</i></li>
-                        <ul>
-                            <li>This preserves causality</li>
-                            <li>Reduces variance</li> 
-                        </ul>
+                            <div class="fragment">
+                            <li>This weights all actions by the same return $R(\tau)$</li>
+                            <ul>
+                                <li>We want each action to be rewarded only for future consequences</li>
+                                <li>Ignores immediate reward of an action</li> 
+                            </ul>
+                            </div>
+                            <div class="fragment">
+                            <li>Instead weigh $a_t$ by only its <i>future rewards</i></li>
+                            <ul>
+                                <li>This preserves causality</li>
+                                <li>Reduces variance</li> 
+                            </ul>
+                            </div>
                         </ul>
                     </section>
 
                     <section>
                         <h4>Implementation</h4>
 
-                        In light of this, we will replace $R(\tau)$ with the per-timestep return...
+                        In light of this, we will replace $R(\tau)$ with the per-timestep return (reward-to-go)
                         $$
                         G_t = \sum_{k=t}^{T}\gamma^{k-t} r_{k}
                         $$
@@ -1674,7 +1697,20 @@
                         </code>
                         </pre>
                     </section>
+
+                    <section>
+                        <h4>Implementation</h4>
+
+                        <p>Further improvements</p>
+                        <ul>
+                            <li>Baseline</li>
+                            <li>Actor-Critic (DDPG, PPO, etc)</li>
+                            <li>Better optimizer</li>
+                            <li>Entropy regularization</li>
+                        </ul>
+                    </section>
                 </section>
+
 
                 <section>
                     <section style="height:100%">
