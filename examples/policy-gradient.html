@@ -3,12 +3,64 @@
     <head>
         <meta charset="utf-8" />
 
-        <title>reveal.js - Markdown Example</title>
+        <title>Kirk Roerig - Policy Gradients</title>
 
         <link rel="stylesheet" href="../dist/reveal.css" />
-        <link rel="stylesheet" href="../dist/theme/solarized.css" id="theme" />
+        <link rel="stylesheet" href="../dist/theme/white.css" id="theme" />
 
         <link rel="stylesheet" href="../dist/plugin/highlight/zenburn.css" />
+
+        <link rel="preconnect" href="https://fonts.googleapis.com">
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;600;700&family=Source+Code+Pro:wght@300;400;500&family=Outfit:wght@300;400;500;600&display=swap" rel="stylesheet">
+
+        <style>
+            /* ── Base — warm cardstock light ── */
+            .reveal {
+                background:
+                    radial-gradient(circle, rgba(60,50,40,0.12) 0.8px, transparent 0.8px) 0 0 / 28px 28px,
+                    radial-gradient(ellipse 140% 140% at 100% 0%, hsla(210,40%,85%,1) 0%, hsla(210,20%,90%,0) 55%),
+                    radial-gradient(ellipse 90% 90% at 0% 100%, hsla(350,30%,85%,1) 0%, hsla(350,15%,90%,0) 40%),
+                    #f0ebe3;
+                font-family: 'Outfit', sans-serif;
+            }
+
+            /* ── Headings ── */
+            .reveal h1, .reveal h2, .reveal h3 {
+                font-family: 'Figtree', sans-serif;
+                font-weight: 700;
+                letter-spacing: -0.01em;
+                color: #1e1c18;
+                text-transform: none;
+            }
+
+            /* ── Labels / subheadings ── */
+            .reveal h4, .reveal h5, .reveal h6 {
+                font-family: 'Source Code Pro', monospace;
+                font-weight: 400;
+                letter-spacing: 0.14em;
+                text-transform: uppercase;
+                color: #7a756b;
+            }
+
+            /* ── Body text ── */
+            .reveal p, .reveal li {
+                color: #3e3a34;
+                font-family: 'Outfit', sans-serif;
+            }
+
+            .reveal b, .reveal strong {
+                color: #1e1c18;
+            }
+
+/* ── Slide number HUD (30% opacity) ── */
+            .slide-number {
+                font-family: 'Source Code Pro', monospace !important;
+                font-size: 10px !important;
+                color: rgba(0,0,0,0.30) !important;
+                background: transparent !important;
+            }
+        </style>
 
         <script name="ui">
             CTX = {}
@@ -1013,7 +1065,7 @@
 
                 <!-- Slides are separated by three dashes (the default) -->
                 <section>
-                    <h2>Policy Gradient Methods</h2>
+                    <h1>Policy Gradient Methods</h1>
                     <h4>REINFORCE</h4>
                     <canvas id="pg-hook" class="r-stretch"></canvas>
                     <script type="text/javascript">
@@ -1025,7 +1077,7 @@
 
                 <section>
                     <h2>Introduction</h2>
-                    <h4>What is Reinforcement-Learning?</h4>
+                    <h4>What is Reinforcement Learning?</h4>
                     
                     <ul>
                         <li class="fragment">Machine learning technique</li>
@@ -1814,6 +1866,7 @@
                 history: true,
                 center: false,
                 maxScale: 1,
+                slideNumber: 'c/t',
                 markdown: {
                     smartypants: true,
                 },
